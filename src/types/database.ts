@@ -35,3 +35,44 @@ export interface BillWithDetails extends Bill {
   line_items: LineItem[];
   bill_totals: BillTotal | null;
 }
+
+export interface Profile {
+  id: string;
+  email: string | null;  // null for phone-only users
+  display_name: string;
+}
+
+export interface BillMember {
+  id: string;
+  bill_id: string;
+  user_id: string;
+  joined_at: string;
+}
+
+export interface BillMemberWithProfile extends BillMember {
+  profiles: Profile;
+}
+
+export interface BillItemClaim {
+  id: string;
+  item_id: string;
+  user_id: string;
+  claimed_at: string;
+}
+
+export interface BillItemClaimWithProfile extends BillItemClaim {
+  profiles: Profile;
+}
+
+export interface LineItemWithClaims extends LineItem {
+  bill_item_claims: BillItemClaimWithProfile[];
+}
+
+export interface ParticipantShare {
+  userId: string;
+  displayName: string;
+  subtotal: number;
+  tax: number;
+  gratuity: number;
+  total: number;
+}

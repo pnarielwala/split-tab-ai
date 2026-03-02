@@ -1,10 +1,14 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { BillSummary } from "@/components/bills/BillSummary";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DeleteBillButton } from "@/components/bills/DeleteBillButton";
+import { ShareButton } from "@/components/bills/ShareButton";
+import { SplitSquareVertical } from "lucide-react";
 
 interface Props {
   params: Promise<{ billId: string }>;
@@ -21,6 +25,12 @@ export default async function BillPage({ params }: Props) {
   const { billId } = await params;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
   const { data: bill } = await supabase
     .from("bills")
     .select("*")
@@ -28,6 +38,8 @@ export default async function BillPage({ params }: Props) {
     .single();
 
   if (!bill) notFound();
+
+  const isOwner = bill.owner_id === user.id;
 
   const [{ data: lineItems }, { data: totals }] = await Promise.all([
     supabase
@@ -43,6 +55,8 @@ export default async function BillPage({ params }: Props) {
   ]);
 
   const status = statusLabels[bill.status] ?? statusLabels.draft;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const shareUrl = `${appUrl}/join/${billId}`;
 
   return (
     <>
@@ -52,7 +66,18 @@ export default async function BillPage({ params }: Props) {
         actions={
           <>
             <Badge variant={status.variant}>{status.label}</Badge>
-            <DeleteBillButton billId={billId} billName={bill.name} />
+            {bill.status === "verified" && (
+              <>
+                <ShareButton shareUrl={shareUrl} />
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/bills/${billId}/split`} className="gap-1.5">
+                    <SplitSquareVertical className="h-4 w-4" />
+                    Split
+                  </Link>
+                </Button>
+              </>
+            )}
+            {isOwner && <DeleteBillButton billId={billId} billName={bill.name} />}
           </>
         }
       />

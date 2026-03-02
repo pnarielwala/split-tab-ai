@@ -17,9 +17,10 @@ const statusLabels: Record<string, { label: string; variant: "default" | "second
 interface BillCardProps {
   bill: Bill;
   total?: BillTotal | null;
+  isOwner?: boolean;
 }
 
-export function BillCard({ bill, total }: BillCardProps) {
+export function BillCard({ bill, total, isOwner = true }: BillCardProps) {
   const status = statusLabels[bill.status] ?? statusLabels.draft;
   const href =
     bill.status === "draft"
@@ -46,9 +47,11 @@ export function BillCard({ bill, total }: BillCardProps) {
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </Link>
-        <div className="pr-2 shrink-0">
-          <DeleteBillButton billId={bill.id} billName={bill.name} />
-        </div>
+        {isOwner && (
+          <div className="pr-2 shrink-0">
+            <DeleteBillButton billId={bill.id} billName={bill.name} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

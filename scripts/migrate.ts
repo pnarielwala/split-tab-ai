@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { readFileSync } from "fs";
+import { readFileSync, readdirSync } from "fs";
 import { resolve } from "path";
 
 const dbUrl = process.env.SUPABASE_DB_URL;
@@ -17,26 +17,49 @@ if (!dbUrl) {
 
 const sql = postgres(dbUrl, { ssl: "require", max: 1 });
 
-const migrationFile = resolve(
-  import.meta.dir,
-  "../supabase/migrations/0001_schema.sql"
-);
-const migration = readFileSync(migrationFile, "utf-8");
+// Create migrations tracking table if it doesn't exist
+await sql`
+  create table if not exists public.schema_migrations (
+    name text primary key,
+    applied_at timestamptz not null default now()
+  )
+`;
 
-console.log("Running migration: 0001_schema.sql ...");
+// Find all migration files, sorted by name
+const migrationsDir = resolve(import.meta.dir, "../supabase/migrations");
+const files = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith(".sql"))
+  .sort();
 
-try {
-  await sql.unsafe(migration);
-  console.log("✓ Migration applied successfully");
-} catch (err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err);
-  // "already exists" errors are safe to ignore on re-runs
-  if (msg.includes("already exists")) {
-    console.log("✓ Migration already applied (tables/policies exist)");
-  } else {
-    console.error("Migration failed:", msg);
+// Fetch already-applied migrations
+const applied = await sql<{ name: string }[]>`
+  select name from public.schema_migrations
+`;
+const appliedSet = new Set(applied.map((r) => r.name));
+
+const pending = files.filter((f) => !appliedSet.has(f));
+
+if (pending.length === 0) {
+  console.log("Nothing to run — all migrations already applied.");
+  await sql.end();
+  process.exit(0);
+}
+
+for (const file of pending) {
+  const migrationFile = resolve(migrationsDir, file);
+  const migration = readFileSync(migrationFile, "utf-8");
+
+  console.log(`Running migration: ${file} ...`);
+  try {
+    await sql.unsafe(migration);
+    await sql`insert into public.schema_migrations (name) values (${file})`;
+    console.log(`✓ ${file} applied`);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`✗ ${file} failed: ${msg}`);
+    await sql.end();
     process.exit(1);
   }
-} finally {
-  await sql.end();
 }
+
+await sql.end();
