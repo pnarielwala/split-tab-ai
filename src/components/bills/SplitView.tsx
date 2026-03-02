@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useTransition } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
@@ -11,7 +10,6 @@ import type {
   BillTotal,
   BillMemberWithProfile,
   Profile,
-  ParticipantShare,
 } from "@/types/database";
 
 interface SplitViewProps {
@@ -34,7 +32,7 @@ export function SplitView({
   const [isPending, startTransition] = useTransition();
   const currency = totals?.currency ?? "USD";
 
-  // Build map of all participants: owner + members
+  // Build map of all participants: owner + members (for badge display names)
   const participantMap = useMemo(() => {
     const map = new Map<string, string>();
     map.set(ownerProfile.id, ownerProfile.display_name);
@@ -58,41 +56,26 @@ export function SplitView({
     });
   }
 
-  // Compute per-participant cost shares
-  const shares = useMemo<ParticipantShare[]>(() => {
+  const myShare = useMemo(() => {
     const billSubtotal = totals?.subtotal ?? 0;
     const billTax = totals?.tax ?? 0;
     const billGratuity = totals?.gratuity ?? 0;
 
-    const subtotals = new Map<string, number>();
+    let subtotal = 0;
     for (const item of lineItems) {
-      const count = item.bill_item_claims.length;
-      if (count === 0) continue;
-      const share = item.total_price / count;
-      for (const claim of item.bill_item_claims) {
-        subtotals.set(claim.user_id, (subtotals.get(claim.user_id) ?? 0) + share);
-      }
+      const claimed = item.bill_item_claims.some((c) => c.user_id === currentUserId);
+      if (!claimed) continue;
+      const splitCount = item.bill_item_claims.length;
+      subtotal += item.total_price / splitCount;
     }
 
-    const result: ParticipantShare[] = [];
-    for (const [userId, displayName] of participantMap.entries()) {
-      const sub = subtotals.get(userId) ?? 0;
-      if (sub === 0) continue;
-      const ratio = billSubtotal > 0 ? sub / billSubtotal : 0;
-      const tax = billTax * ratio;
-      const gratuity = billGratuity * ratio;
-      result.push({
-        userId,
-        displayName,
-        subtotal: sub,
-        tax,
-        gratuity,
-        total: sub + tax + gratuity,
-      });
-    }
+    if (subtotal === 0) return null;
 
-    return result.sort((a, b) => b.total - a.total);
-  }, [lineItems, totals, participantMap]);
+    const ratio = billSubtotal > 0 ? subtotal / billSubtotal : 0;
+    const tax = billTax * ratio;
+    const gratuity = billGratuity * ratio;
+    return { subtotal, tax, gratuity, total: subtotal + tax + gratuity };
+  }, [lineItems, totals, currentUserId]);
 
   return (
     <div className="space-y-6">
@@ -153,68 +136,39 @@ export function SplitView({
         </div>
       </div>
 
-      {/* Cost breakdown */}
-      {shares.length > 0 && (
+      {/* My cost breakdown */}
+      {myShare ? (
         <div>
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-            Cost breakdown
+            Your total
           </h2>
-          <div className="space-y-3">
-            {shares.map((share) => {
-              const isMe = share.userId === currentUserId;
-              return (
-                <Card
-                  key={share.userId}
-                  className={isMe ? "border-primary ring-1 ring-primary" : ""}
-                >
-                  <CardHeader className="pb-2 pt-3 px-4">
-                    <CardTitle className="text-sm flex items-center justify-between">
-                      <span>
-                        {share.displayName}
-                        {isMe && (
-                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                            (you)
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-base font-bold">
-                        {formatCurrency(share.total, currency)}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-3 space-y-1 text-xs text-muted-foreground">
-                    <div className="flex justify-between">
-                      <span>Items</span>
-                      <span>{formatCurrency(share.subtotal, currency)}</span>
-                    </div>
-                    {share.tax > 0 && (
-                      <div className="flex justify-between">
-                        <span>Tax (prorated)</span>
-                        <span>{formatCurrency(share.tax, currency)}</span>
-                      </div>
-                    )}
-                    {share.gratuity > 0 && (
-                      <div className="flex justify-between">
-                        <span>Tip (prorated)</span>
-                        <span>{formatCurrency(share.gratuity, currency)}</span>
-                      </div>
-                    )}
-                    <Separator className="my-1" />
-                    <div className="flex justify-between font-semibold text-foreground">
-                      <span>Total</span>
-                      <span>{formatCurrency(share.total, currency)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+          <div className="rounded-lg border p-4 space-y-1.5 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Items</span>
+              <span>{formatCurrency(myShare.subtotal, currency)}</span>
+            </div>
+            {myShare.tax > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Tax (prorated)</span>
+                <span>{formatCurrency(myShare.tax, currency)}</span>
+              </div>
+            )}
+            {myShare.gratuity > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Tip (prorated)</span>
+                <span>{formatCurrency(myShare.gratuity, currency)}</span>
+              </div>
+            )}
+            <Separator className="my-1" />
+            <div className="flex justify-between font-semibold text-base">
+              <span>Total</span>
+              <span>{formatCurrency(myShare.total, currency)}</span>
+            </div>
           </div>
         </div>
-      )}
-
-      {shares.length === 0 && (
-        <p className="text-sm text-muted-foreground text-center py-4">
-          Tap items above to see your cost breakdown.
+      ) : (
+        <p className="text-sm text-muted-foreground text-center py-2">
+          Tap items above to see your total.
         </p>
       )}
     </div>
