@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { ThemeSelector } from "@/components/account/ThemeSelector";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -42,6 +43,10 @@ export default async function AccountPage() {
                 <p className="font-medium">{profile?.phone ?? user.phone}</p>
               </div>
             )}
+          </div>
+          <div className="rounded-lg border p-4 space-y-2">
+            <p className="text-sm font-medium">Appearance</p>
+            <ThemeSelector />
           </div>
           <SignOutButton />
         </div>
