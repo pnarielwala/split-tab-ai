@@ -69,7 +69,12 @@ export function LoginForm() {
 
     const { error } = authMethod === "phone"
       ? await supabase.auth.signInWithOtp({ phone: normalizedPhone })
-      : await supabase.auth.signInWithOtp({ email });
+      : await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
 
     if (error) {
       toast.error(error.message);
@@ -107,11 +112,34 @@ export function LoginForm() {
     router.refresh();
   }
 
+  if (step === "otp" && authMethod === "email") {
+    return (
+      <div className="space-y-4 text-center">
+        <p className="text-sm text-muted-foreground">
+          We sent a magic link to <span className="font-medium text-foreground">{email}</span>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Click the link in your email to sign in.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Use a different email?{" "}
+          <button
+            type="button"
+            onClick={() => { setStep("method"); setToken(""); }}
+            className="text-primary underline underline-offset-4"
+          >
+            Go back
+          </button>
+        </p>
+      </div>
+    );
+  }
+
   if (step === "otp") {
     return (
       <form onSubmit={handleOtpSubmit} className="space-y-4">
         <p className="text-sm text-muted-foreground text-center">
-          Code sent to {authMethod === "phone" ? phone : email}
+          Code sent to {phone}
         </p>
 
         <div className="space-y-1">
@@ -136,13 +164,13 @@ export function LoginForm() {
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
-          Wrong {authMethod === "phone" ? "number" : "email"}?{" "}
+          Wrong number?{" "}
           <button
             type="button"
             onClick={() => { setStep("method"); setToken(""); }}
             className="text-primary underline underline-offset-4"
           >
-            {authMethod === "phone" ? "Change number" : "Change email"}
+            Change number
           </button>
         </p>
       </form>
