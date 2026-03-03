@@ -1,34 +1,34 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = searchParams.get('next') ?? '/dashboard';
 
-  const [step, setStep] = useState<"method" | "otp">("method");
-  const [authMethod, setAuthMethod] = useState<"phone" | "email">("phone");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [token, setToken] = useState("");
+  const [step, setStep] = useState<'method' | 'otp'>('method');
+  const [authMethod, setAuthMethod] = useState<'phone' | 'email'>('phone');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [token, setToken] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const phoneRegex = /^\+[1-9]\d{7,14}$/;
 
   function normalizePhone(value: string): string {
-    const digits = value.replace(/\D/g, "");
+    const digits = value.replace(/\D/g, '');
     if (digits.length === 10) return `+1${digits}`;
-    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-    if (value.startsWith("+")) return `+${digits}`;
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+    if (value.startsWith('+')) return `+${digits}`;
     return value;
   }
 
@@ -38,10 +38,11 @@ export function LoginForm() {
 
     const normalizedPhone = normalizePhone(phone);
 
-    if (authMethod === "phone") {
-      if (!phoneRegex.test(normalizedPhone)) newErrors.phone = "Enter a valid phone number (e.g. 555-123-4567)";
+    if (authMethod === 'phone') {
+      if (!phoneRegex.test(normalizedPhone))
+        newErrors.phone = 'Enter a valid phone number (e.g. 555-123-4567)';
     } else {
-      if (!email.trim()) newErrors.email = "Email is required";
+      if (!email.trim()) newErrors.email = 'Email is required';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -54,27 +55,33 @@ export function LoginForm() {
     setLoading(true);
     const supabase = createClient();
 
-    const { data: accountExists } = await supabase.rpc("check_account_exists",
-      authMethod === "phone" ? { p_phone: normalizedPhone } : { p_email: email.trim() }
+    const { data: accountExists } = await supabase.rpc(
+      'check_account_exists',
+      authMethod === 'phone'
+        ? { p_phone: normalizedPhone }
+        : { p_email: email.trim() }
     );
 
     if (!accountExists) {
-      setErrors(authMethod === "phone"
-        ? { phone: "No account found with that phone number" }
-        : { email: "No account found with that email address" }
+      setErrors(
+        authMethod === 'phone'
+          ? { phone: 'No account found with that phone number' }
+          : { email: 'No account found with that email address' }
       );
       setLoading(false);
       return;
     }
 
-    const { error } = authMethod === "phone"
-      ? await supabase.auth.signInWithOtp({ phone: normalizedPhone })
-      : await supabase.auth.signInWithOtp({
-          email: email.trim(),
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
+    const { error } =
+      authMethod === 'phone'
+        ? await supabase.auth.signInWithOtp({
+            phone: normalizedPhone,
+            options: { shouldCreateUser: false },
+          })
+        : await supabase.auth.signInWithOtp({
+            email: email.trim(),
+            options: { shouldCreateUser: false },
+          });
 
     if (error) {
       toast.error(error.message);
@@ -83,7 +90,7 @@ export function LoginForm() {
     }
 
     setLoading(false);
-    setStep("otp");
+    setStep('otp');
   }
 
   async function handleOtpSubmit(e: React.FormEvent) {
@@ -91,16 +98,17 @@ export function LoginForm() {
     setErrors({});
 
     if (!/^\d{6}$/.test(token)) {
-      setErrors({ token: "Enter the 6-digit code" });
+      setErrors({ token: 'Enter the 6-digit code' });
       return;
     }
 
     setLoading(true);
     const supabase = createClient();
 
-    const { error } = authMethod === "phone"
-      ? await supabase.auth.verifyOtp({ phone, token, type: "sms" })
-      : await supabase.auth.verifyOtp({ email, token, type: "email" });
+    const { error } =
+      authMethod === 'phone'
+        ? await supabase.auth.verifyOtp({ phone, token, type: 'sms' })
+        : await supabase.auth.verifyOtp({ email, token, type: 'email' });
 
     if (error) {
       toast.error(error.message);
@@ -112,34 +120,11 @@ export function LoginForm() {
     router.refresh();
   }
 
-  if (step === "otp" && authMethod === "email") {
-    return (
-      <div className="space-y-4 text-center">
-        <p className="text-sm text-muted-foreground">
-          We sent a magic link to <span className="font-medium text-foreground">{email}</span>
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Click the link in your email to sign in.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Use a different email?{" "}
-          <button
-            type="button"
-            onClick={() => { setStep("method"); setToken(""); }}
-            className="text-primary underline underline-offset-4"
-          >
-            Go back
-          </button>
-        </p>
-      </div>
-    );
-  }
-
-  if (step === "otp") {
+  if (step === 'otp') {
     return (
       <form onSubmit={handleOtpSubmit} className="space-y-4">
         <p className="text-sm text-muted-foreground text-center">
-          Code sent to {phone}
+          Code sent to {authMethod === 'email' ? email : phone}
         </p>
 
         <div className="space-y-1">
@@ -152,7 +137,7 @@ export function LoginForm() {
             placeholder="123456"
             autoComplete="one-time-code"
             value={token}
-            onChange={(e) => setToken(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => setToken(e.target.value.replace(/\D/g, ''))}
           />
           {errors.token && (
             <p className="text-xs text-destructive">{errors.token}</p>
@@ -160,17 +145,20 @@ export function LoginForm() {
         </div>
 
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Verifying..." : "Verify code"}
+          {loading ? 'Verifying...' : 'Verify code'}
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
-          Wrong number?{" "}
+          Wrong {authMethod === 'email' ? 'email' : 'number'}?{' '}
           <button
             type="button"
-            onClick={() => { setStep("method"); setToken(""); }}
+            onClick={() => {
+              setStep('method');
+              setToken('');
+            }}
             className="text-primary underline underline-offset-4"
           >
-            Change number
+            Go back
           </button>
         </p>
       </form>
@@ -182,29 +170,35 @@ export function LoginForm() {
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => { setAuthMethod("phone"); setErrors({}); }}
+          onClick={() => {
+            setAuthMethod('phone');
+            setErrors({});
+          }}
           className={`flex-1 rounded-full border py-1.5 text-sm font-medium transition-colors ${
-            authMethod === "phone"
-              ? "bg-primary text-primary-foreground border-primary"
-              : "border-input bg-background text-muted-foreground hover:bg-muted"
+            authMethod === 'phone'
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-input bg-background text-muted-foreground hover:bg-muted'
           }`}
         >
           Phone
         </button>
         <button
           type="button"
-          onClick={() => { setAuthMethod("email"); setErrors({}); }}
+          onClick={() => {
+            setAuthMethod('email');
+            setErrors({});
+          }}
           className={`flex-1 rounded-full border py-1.5 text-sm font-medium transition-colors ${
-            authMethod === "email"
-              ? "bg-primary text-primary-foreground border-primary"
-              : "border-input bg-background text-muted-foreground hover:bg-muted"
+            authMethod === 'email'
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'border-input bg-background text-muted-foreground hover:bg-muted'
           }`}
         >
           Email
         </button>
       </div>
 
-      {authMethod === "phone" ? (
+      {authMethod === 'phone' ? (
         <div className="space-y-1">
           <Label htmlFor="phone">Phone number</Label>
           <Input
@@ -237,12 +231,15 @@ export function LoginForm() {
       )}
 
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Sending code..." : "Send code"}
+        {loading ? 'Sending code...' : 'Send code'}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-primary underline underline-offset-4">
+        Don&apos;t have an account?{' '}
+        <Link
+          href="/signup"
+          className="text-primary underline underline-offset-4"
+        >
           Sign up
         </Link>
       </p>

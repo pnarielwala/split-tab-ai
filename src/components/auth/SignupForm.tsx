@@ -1,34 +1,35 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
+import { linkUserIdentifiers } from '@/app/actions/auth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export function SignupForm() {
   const router = useRouter();
 
-  const [step, setStep] = useState<"details" | "otp">("details");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [delivery, setDelivery] = useState<"email" | "phone">("email");
-  const [token, setToken] = useState("");
+  const [step, setStep] = useState<'details' | 'otp'>('details');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [delivery, setDelivery] = useState<'email' | 'phone'>('email');
+  const [token, setToken] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const phoneRegex = /^\+[1-9]\d{7,14}$/;
 
   function normalizePhone(value: string): string {
-    const digits = value.replace(/\D/g, "");
+    const digits = value.replace(/\D/g, '');
     if (digits.length === 10) return `+1${digits}`;
-    if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-    if (value.startsWith("+")) return `+${digits}`;
+    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+    if (value.startsWith('+')) return `+${digits}`;
     return value;
   }
 
@@ -38,10 +39,11 @@ export function SignupForm() {
 
     const normalizedPhone = normalizePhone(phone);
 
-    if (!firstName.trim()) newErrors.firstName = "First name is required";
-    if (!lastName.trim()) newErrors.lastName = "Last name is required";
-    if (!email.trim()) newErrors.email = "Email is required";
-    if (!phoneRegex.test(normalizedPhone)) newErrors.phone = "Enter a valid phone number (e.g. 555-123-4567)";
+    if (!firstName.trim()) newErrors.firstName = 'First name is required';
+    if (!lastName.trim()) newErrors.lastName = 'Last name is required';
+    if (!email.trim()) newErrors.email = 'Email is required';
+    if (!phoneRegex.test(normalizedPhone))
+      newErrors.phone = 'Enter a valid phone number (e.g. 555-123-4567)';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -53,9 +55,10 @@ export function SignupForm() {
     setLoading(true);
     const supabase = createClient();
 
-    const { error } = delivery === "email"
-      ? await supabase.auth.signInWithOtp({ email })
-      : await supabase.auth.signInWithOtp({ phone: normalizedPhone });
+    const { error } =
+      delivery === 'email'
+        ? await supabase.auth.signInWithOtp({ email })
+        : await supabase.auth.signInWithOtp({ phone: normalizedPhone });
 
     if (error) {
       toast.error(error.message);
@@ -64,7 +67,7 @@ export function SignupForm() {
     }
 
     setLoading(false);
-    setStep("otp");
+    setStep('otp');
   }
 
   async function handleOtpSubmit(e: React.FormEvent) {
@@ -72,16 +75,17 @@ export function SignupForm() {
     setErrors({});
 
     if (!/^\d{6}$/.test(token)) {
-      setErrors({ token: "Enter the 6-digit code" });
+      setErrors({ token: 'Enter the 6-digit code' });
       return;
     }
 
     setLoading(true);
     const supabase = createClient();
 
-    const { data, error } = delivery === "email"
-      ? await supabase.auth.verifyOtp({ email, token, type: "email" })
-      : await supabase.auth.verifyOtp({ phone, token, type: "sms" });
+    const { data, error } =
+      delivery === 'email'
+        ? await supabase.auth.verifyOtp({ email, token, type: 'email' })
+        : await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
 
     if (error) {
       toast.error(error.message);
@@ -91,33 +95,46 @@ export function SignupForm() {
 
     let user = data.user;
     if (!user) {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
       user = currentUser;
     }
 
     if (user) {
-      const { error: upsertError } = await supabase.from("profiles").upsert({
+      const { error: linkError } = await linkUserIdentifiers(
+        user.id,
+        email.trim(),
+        phone.trim()
+      );
+      if (linkError) {
+        toast.error('Failed to link account: ' + linkError);
+        setLoading(false);
+        return;
+      }
+
+      const { error: upsertError } = await supabase.from('profiles').upsert({
         id: user.id,
         email: email.trim() || null,
         phone: phone.trim() || null,
         display_name: `${firstName} ${lastName}`.trim(),
       });
       if (upsertError) {
-        toast.error("Failed to save profile: " + upsertError.message);
+        toast.error('Failed to save profile: ' + upsertError.message);
         setLoading(false);
         return;
       }
     }
 
-    router.push("/dashboard");
+    router.push('/dashboard');
     router.refresh();
   }
 
-  if (step === "otp") {
+  if (step === 'otp') {
     return (
       <form onSubmit={handleOtpSubmit} className="space-y-4">
         <p className="text-sm text-muted-foreground text-center">
-          Code sent to {delivery === "email" ? email : phone}
+          Code sent to {delivery === 'email' ? email : phone}
         </p>
 
         <div className="space-y-1">
@@ -130,7 +147,7 @@ export function SignupForm() {
             placeholder="123456"
             autoComplete="one-time-code"
             value={token}
-            onChange={(e) => setToken(e.target.value.replace(/\D/g, ""))}
+            onChange={(e) => setToken(e.target.value.replace(/\D/g, ''))}
           />
           {errors.token && (
             <p className="text-xs text-destructive">{errors.token}</p>
@@ -138,14 +155,17 @@ export function SignupForm() {
         </div>
 
         <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? "Verifying..." : "Verify code"}
+          {loading ? 'Verifying...' : 'Verify code'}
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
-          Wrong {delivery === "email" ? "email" : "number"}?{" "}
+          Wrong {delivery === 'email' ? 'email' : 'number'}?{' '}
           <button
             type="button"
-            onClick={() => { setStep("details"); setToken(""); }}
+            onClick={() => {
+              setStep('details');
+              setToken('');
+            }}
             className="text-primary underline underline-offset-4"
           >
             Go back
@@ -224,22 +244,22 @@ export function SignupForm() {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setDelivery("email")}
+            onClick={() => setDelivery('email')}
             className={`flex-1 rounded-full border py-1.5 text-sm font-medium transition-colors ${
-              delivery === "email"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-input bg-background text-muted-foreground hover:bg-muted"
+              delivery === 'email'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-input bg-background text-muted-foreground hover:bg-muted'
             }`}
           >
             Email
           </button>
           <button
             type="button"
-            onClick={() => setDelivery("phone")}
+            onClick={() => setDelivery('phone')}
             className={`flex-1 rounded-full border py-1.5 text-sm font-medium transition-colors ${
-              delivery === "phone"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-input bg-background text-muted-foreground hover:bg-muted"
+              delivery === 'phone'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'border-input bg-background text-muted-foreground hover:bg-muted'
             }`}
           >
             Phone
@@ -248,12 +268,15 @@ export function SignupForm() {
       </div>
 
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Sending code..." : "Send code"}
+        {loading ? 'Sending code...' : 'Send code'}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link href="/login" className="text-primary underline underline-offset-4">
+        Already have an account?{' '}
+        <Link
+          href="/login"
+          className="text-primary underline underline-offset-4"
+        >
           Sign in
         </Link>
       </p>
