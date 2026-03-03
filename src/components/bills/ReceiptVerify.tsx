@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { addLineItem, updateBillTotals, confirmBill } from "@/app/actions/bills";
+import { addLineItem, updateBillTotals, confirmBill, clearBillParseData } from "@/app/actions/bills";
 import { LineItemRow } from "./LineItemRow";
+import { ParseLoadingState } from "./ParseLoadingState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -15,10 +16,12 @@ interface ReceiptVerifyProps {
   billId: string;
   lineItems: LineItem[];
   totals: BillTotal | null;
+  receiptUrl: string;
 }
 
-export function ReceiptVerify({ billId, lineItems, totals }: ReceiptVerifyProps) {
+export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: ReceiptVerifyProps) {
   const [isPending, startTransition] = useTransition();
+  const [isReparsing, setIsReparsing] = useState(false);
 
   // Add item form
   const [showAdd, setShowAdd] = useState(false);
@@ -80,16 +83,44 @@ export function ReceiptVerify({ billId, lineItems, totals }: ReceiptVerifyProps)
     startTransition(async () => {
       try {
         await confirmBill(billId);
-      } catch {
+      } catch (err) {
+        // Next.js redirect() works by throwing internally — don't treat as an error
+        if ((err as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw err;
         toast.error("Failed to confirm bill");
       }
     });
+  }
+
+  async function handleReparse() {
+    setIsReparsing(true);
+    try {
+      await clearBillParseData(billId);
+      const res = await fetch("/api/parse-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billId, receiptUrl }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json().catch(() => ({ error: "Parse failed" }));
+        toast.error(error ?? "Receipt parsing failed");
+        setIsReparsing(false);
+        return;
+      }
+      window.location.href = `/bills/${billId}/verify`;
+    } catch {
+      toast.error("Re-parse failed");
+      setIsReparsing(false);
+    }
   }
 
   const subtotal = lineItems.reduce((sum, i) => sum + i.total_price, 0);
   const taxVal = tax !== "" ? parseFloat(tax) || 0 : totals?.tax ?? 0;
   const gratuityVal = gratuity !== "" ? parseFloat(gratuity) || 0 : totals?.gratuity ?? 0;
   const computedTotal = subtotal + taxVal + gratuityVal;
+
+  if (isReparsing) {
+    return <ParseLoadingState />;
+  }
 
   return (
     <div className="space-y-4">
@@ -206,6 +237,16 @@ export function ReceiptVerify({ billId, lineItems, totals }: ReceiptVerifyProps)
         disabled={isPending}
       >
         {isPending ? "Confirming..." : "Confirm bill"}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        className="w-full text-muted-foreground"
+        onClick={handleReparse}
+      >
+        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+        Re-parse receipt
       </Button>
     </div>
   );

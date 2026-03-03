@@ -141,6 +141,19 @@ export async function updateBillTotals(
   revalidatePath(`/bills/${billId}/verify`);
 }
 
+// ── Clear parsed data (for re-parse) ─────────────────────────────────────────
+
+export async function clearBillParseData(billId: string) {
+  const supabase = await createClient();
+  await supabase.from('line_items').delete().eq('bill_id', billId);
+  await supabase.from('bill_totals').delete().eq('bill_id', billId);
+  const { error } = await supabase
+    .from('bills')
+    .update({ status: 'uploaded' })
+    .eq('id', billId);
+  if (error) throw new Error(error.message);
+}
+
 // ── Confirm bill (set status → verified) ─────────────────────────────────────
 
 export async function confirmBill(billId: string) {

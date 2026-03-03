@@ -60,14 +60,19 @@ export async function POST(request: NextRequest) {
 
   // 6. Insert line items
   if (parsed.lineItems.length > 0) {
-    const items = parsed.lineItems.map((item, i) => ({
-      bill_id: billId,
-      name: item.name,
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      total_price: item.totalPrice,
-      sort_order: i,
-    }));
+    const items = parsed.lineItems.map((item, i) => {
+      const qty = item.quantity ?? 1;
+      const unitPrice =
+        item.unitPrice ?? (item.totalPrice != null ? item.totalPrice / qty : 0);
+      return {
+        bill_id: billId,
+        name: item.name,
+        quantity: qty,
+        unit_price: unitPrice,
+        total_price: item.totalPrice ?? unitPrice * qty,
+        sort_order: i,
+      };
+    });
 
     const { error: itemsError } = await supabase.from("line_items").insert(items);
     if (itemsError) {
@@ -75,13 +80,18 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 7. Upsert bill totals
+  // 7. Upsert bill totals (fill in nulls via calculation)
+  const computedSubtotal =
+    parsed.subtotal ?? parsed.lineItems.reduce((sum, item) => sum + (item.totalPrice ?? 0), 0);
+  const computedTotal =
+    parsed.total ?? computedSubtotal + (parsed.tax ?? 0) + (parsed.gratuity ?? 0);
+
   const { error: totalsError } = await supabase.from("bill_totals").upsert({
     bill_id: billId,
-    subtotal: parsed.subtotal,
+    subtotal: computedSubtotal,
     tax: parsed.tax,
     gratuity: parsed.gratuity,
-    total: parsed.total,
+    total: computedTotal,
     currency: parsed.currency ?? "USD",
   });
 
