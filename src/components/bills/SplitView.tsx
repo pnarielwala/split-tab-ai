@@ -1,58 +1,95 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useOptimistic, startTransition } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { claimItem, unclaimItem } from "@/app/actions/bills";
-import type {
-  LineItemWithClaims,
-  BillTotal,
-  BillMemberWithProfile,
-  Profile,
-} from "@/types/database";
+import { getSplitPageData } from "@/app/actions/queries";
+import type { LineItemWithClaims } from "@/types/database";
 
 interface SplitViewProps {
   billId: string;
   currentUserId: string;
-  lineItems: LineItemWithClaims[];
-  totals: BillTotal | null;
-  members: BillMemberWithProfile[];
-  ownerProfile: Profile;
 }
 
-export function SplitView({
-  billId,
-  currentUserId,
-  lineItems,
-  totals,
-  members,
-  ownerProfile,
-}: SplitViewProps) {
-  const [isPending, startTransition] = useTransition();
+export function SplitView({ billId, currentUserId }: SplitViewProps) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["split", billId],
+    queryFn: () => getSplitPageData(billId),
+    staleTime: 10_000,
+  });
+
+  const serverItems = data?.lineItems ?? [];
+  const totals = data?.totals ?? null;
+  const members = data?.members ?? [];
+  const ownerProfile = data?.ownerProfile;
   const currency = totals?.currency ?? "USD";
 
-  // Build map of all participants: owner + members (for badge display names)
   const participantMap = useMemo(() => {
     const map = new Map<string, string>();
-    map.set(ownerProfile.id, ownerProfile.display_name);
+    if (ownerProfile) map.set(ownerProfile.id, ownerProfile.display_name);
     for (const m of members) {
       map.set(m.user_id, m.profiles.display_name);
     }
     return map;
   }, [ownerProfile, members]);
 
+  const myName = participantMap.get(currentUserId) ?? "You";
+
+  const [optimisticItems, addOptimistic] = useOptimistic(
+    serverItems,
+    (
+      state: LineItemWithClaims[],
+      update: { itemId: string; action: "claim" | "unclaim" }
+    ) =>
+      state.map((item) =>
+        item.id !== update.itemId
+          ? item
+          : {
+              ...item,
+              bill_item_claims:
+                update.action === "claim"
+                  ? [
+                      ...item.bill_item_claims,
+                      {
+                        id: "",
+                        item_id: update.itemId,
+                        user_id: currentUserId,
+                        claimed_at: "",
+                        profiles: {
+                          id: currentUserId,
+                          display_name: myName,
+                          email: null,
+                        },
+                      },
+                    ]
+                  : item.bill_item_claims.filter(
+                      (c) => c.user_id !== currentUserId
+                    ),
+            }
+      )
+  );
+
   function isClaimed(item: LineItemWithClaims) {
     return item.bill_item_claims.some((c) => c.user_id === currentUserId);
   }
 
   function handleToggle(item: LineItemWithClaims) {
+    const claimed = isClaimed(item);
     startTransition(async () => {
-      if (isClaimed(item)) {
+      addOptimistic({ itemId: item.id, action: claimed ? "unclaim" : "claim" });
+      if (claimed) {
         await unclaimItem(item.id, billId);
       } else {
         await claimItem(item.id, billId);
       }
+      queryClient.invalidateQueries({ queryKey: ["split", billId] });
+      queryClient.invalidateQueries({ queryKey: ["bill", billId] });
     });
   }
 
@@ -62,7 +99,7 @@ export function SplitView({
     const billGratuity = totals?.gratuity ?? 0;
 
     let subtotal = 0;
-    for (const item of lineItems) {
+    for (const item of optimisticItems) {
       const claimed = item.bill_item_claims.some((c) => c.user_id === currentUserId);
       if (!claimed) continue;
       const splitCount = item.bill_item_claims.length;
@@ -75,7 +112,26 @@ export function SplitView({
     const tax = billTax * ratio;
     const gratuity = billGratuity * ratio;
     return { subtotal, tax, gratuity, total: subtotal + tax + gratuity };
-  }, [lineItems, totals, currentUserId]);
+  }, [optimisticItems, totals, currentUserId]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-4 w-32 mb-3" />
+          <div className="space-y-0">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 py-3 border-b last:border-b-0">
+                <Skeleton className="h-5 w-5 rounded-full shrink-0" />
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-14 shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -85,14 +141,13 @@ export function SplitView({
           Tap to claim items
         </h2>
         <div className="space-y-0">
-          {lineItems.map((item) => {
+          {optimisticItems.map((item) => {
             const claimed = isClaimed(item);
             return (
               <button
                 key={item.id}
                 onClick={() => handleToggle(item)}
-                disabled={isPending}
-                className="w-full text-left border-b last:border-b-0 py-3 flex items-start gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-60"
+                className="w-full text-left border-b last:border-b-0 py-3 flex items-start gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
               >
                 {/* Claim indicator */}
                 <span
