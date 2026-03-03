@@ -4,7 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TopHeaderProps {
-  title: string;
+  title?: string;
   backHref?: string;
   actions?: ReactNode;
   className?: string;
@@ -26,7 +26,8 @@ export function TopHeader({ title, backHref, actions, className }: TopHeaderProp
           <ChevronLeft className="h-5 w-5" />
         </Link>
       )}
-      <h1 className="flex-1 font-semibold truncate">{title}</h1>
+      {title && <h1 className="flex-1 font-semibold truncate">{title}</h1>}
+      {!title && <div className="flex-1" />}
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </header>
   );

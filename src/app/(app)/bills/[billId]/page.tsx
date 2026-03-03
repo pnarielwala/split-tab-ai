@@ -6,9 +6,8 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { BillSummary } from "@/components/bills/BillSummary";
 import { CostBreakdown } from "@/components/bills/CostBreakdown";
 import { Badge } from "@/components/ui/badge";
+import { BillActionsMenu } from "@/components/bills/BillActionsMenu";
 import { Button } from "@/components/ui/button";
-import { DeleteBillButton } from "@/components/bills/DeleteBillButton";
-import { ShareButton } from "@/components/bills/ShareButton";
 import { SplitSquareVertical } from "lucide-react";
 import type { LineItemWithClaims, BillMemberWithProfile, ParticipantShare } from "@/types/database";
 
@@ -111,30 +110,36 @@ export default async function BillPage({ params }: Props) {
   return (
     <>
       <TopHeader
-        title={bill.name}
         backHref="/dashboard"
         actions={
           <>
             <Badge variant={status.variant}>{status.label}</Badge>
             {bill.status === "verified" && (
-              <>
-                <ShareButton shareUrl={shareUrl} />
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/bills/${billId}/split`} className="gap-1.5">
-                    <SplitSquareVertical className="h-4 w-4" />
-                    Split
-                  </Link>
-                </Button>
-              </>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/bills/${billId}/split`} className="gap-1.5">
+                  <SplitSquareVertical className="h-4 w-4" />
+                  Split
+                </Link>
+              </Button>
             )}
-            {isOwner && <DeleteBillButton billId={billId} billName={bill.name} />}
+            <BillActionsMenu
+              billId={billId}
+              billName={bill.name}
+              isOwner={isOwner}
+              isVerified={bill.status === "verified"}
+              shareUrl={shareUrl}
+              receiptUrl={bill.receipt_url}
+            />
           </>
         }
       />
       <PageContainer>
-        {bill.description && (
-          <p className="text-sm text-muted-foreground mb-4">{bill.description}</p>
-        )}
+        <div className="mb-4">
+          <h1 className="text-xl font-bold">{bill.name}</h1>
+          {bill.description && (
+            <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>
+          )}
+        </div>
         <div className="space-y-6">
           <BillSummary lineItems={lineItems} totals={totals ?? null} />
           {shares.length > 0 && (
