@@ -112,6 +112,8 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
   const billSubtotal = totals?.subtotal ?? 0;
   const billTax = totals?.tax ?? 0;
   const billGratuity = totals?.gratuity ?? 0;
+  const billFees = totals?.fees ?? 0;
+  const billDiscounts = totals?.discounts ?? 0;
   const subtotals = new Map<string, number>();
   for (const item of lineItems) {
     const count = item.bill_item_claims.length;
@@ -133,7 +135,9 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
       subtotal: sub,
       tax: billTax * ratio,
       gratuity: billGratuity * ratio,
-      total: sub + billTax * ratio + billGratuity * ratio,
+      fees: billFees * ratio,
+      discounts: billDiscounts * ratio,
+      total: sub + billTax * ratio + billGratuity * ratio + billFees * ratio - billDiscounts * ratio,
     });
   }
   shares.sort((a, b) => b.total - a.total);

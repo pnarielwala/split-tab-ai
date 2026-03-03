@@ -84,13 +84,16 @@ export async function POST(request: NextRequest) {
   const computedSubtotal =
     parsed.subtotal ?? parsed.lineItems.reduce((sum, item) => sum + (item.totalPrice ?? 0), 0);
   const computedTotal =
-    parsed.total ?? computedSubtotal + (parsed.tax ?? 0) + (parsed.gratuity ?? 0);
+    parsed.total ??
+    computedSubtotal + (parsed.tax ?? 0) + (parsed.gratuity ?? 0) + (parsed.fees ?? 0) - (parsed.discounts ?? 0);
 
   const { error: totalsError } = await supabase.from("bill_totals").upsert({
     bill_id: billId,
     subtotal: computedSubtotal,
     tax: parsed.tax,
     gratuity: parsed.gratuity,
+    fees: parsed.fees,
+    discounts: parsed.discounts,
     total: computedTotal,
     currency: parsed.currency ?? "USD",
   });

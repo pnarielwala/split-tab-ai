@@ -147,11 +147,11 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
               <button
                 key={item.id}
                 onClick={() => handleToggle(item)}
-                className="w-full text-left border-b last:border-b-0 py-3 flex items-start gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                className="w-full text-left border-b last:border-b-0 py-3 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
               >
                 {/* Claim indicator */}
                 <span
-                  className={`mt-0.5 shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                  className={`shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     claimed
                       ? "bg-primary border-primary"
                       : "border-muted-foreground/40"
@@ -164,8 +164,18 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
 
                 {/* Item info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-baseline gap-1.5 min-w-0">
+                      <span className="text-sm text-muted-foreground shrink-0 w-5 text-center">
+                        {item.quantity}
+                      </span>
+                      <p className="text-sm font-medium truncate">{item.name}</p>
+                      {item.quantity > 1 && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          × {formatCurrency(item.unit_price, currency)}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm font-medium shrink-0">
                       {formatCurrency(item.total_price, currency)}
                     </p>
@@ -210,7 +220,7 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
             )}
             {myShare.gratuity > 0 && (
               <div className="flex justify-between text-muted-foreground">
-                <span>Tip (prorated)</span>
+                <span>Gratuity (prorated)</span>
                 <span>{formatCurrency(myShare.gratuity, currency)}</span>
               </div>
             )}

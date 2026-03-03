@@ -32,6 +32,8 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: Receipt
   // Totals editing
   const [tax, setTax] = useState(totals?.tax != null ? String(totals.tax) : "");
   const [gratuity, setGratuity] = useState(totals?.gratuity != null ? String(totals.gratuity) : "");
+  const [fees, setFees] = useState(totals?.fees != null ? String(totals.fees) : "");
+  const [discounts, setDiscounts] = useState(totals?.discounts != null ? String(totals.discounts) : "");
 
   async function handleAddItem() {
     if (!newName.trim() || !newPrice.trim()) {
@@ -62,14 +64,18 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: Receipt
     const subtotal = lineItems.reduce((sum, i) => sum + i.total_price, 0);
     const taxVal = tax !== "" ? parseFloat(tax) : null;
     const gratuityVal = gratuity !== "" ? parseFloat(gratuity) : null;
+    const feesVal = fees !== "" ? parseFloat(fees) : null;
+    const discountsVal = discounts !== "" ? parseFloat(discounts) : null;
     const total =
-      subtotal + (taxVal ?? 0) + (gratuityVal ?? 0);
+      subtotal + (taxVal ?? 0) + (gratuityVal ?? 0) + (feesVal ?? 0) - (discountsVal ?? 0);
 
     try {
       await updateBillTotals(billId, {
         subtotal,
         tax: taxVal,
         gratuity: gratuityVal,
+        fees: feesVal,
+        discounts: discountsVal,
         total,
         currency: totals?.currency ?? "USD",
       });
@@ -116,7 +122,9 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: Receipt
   const subtotal = lineItems.reduce((sum, i) => sum + i.total_price, 0);
   const taxVal = tax !== "" ? parseFloat(tax) || 0 : totals?.tax ?? 0;
   const gratuityVal = gratuity !== "" ? parseFloat(gratuity) || 0 : totals?.gratuity ?? 0;
-  const computedTotal = subtotal + taxVal + gratuityVal;
+  const feesVal = fees !== "" ? parseFloat(fees) || 0 : totals?.fees ?? 0;
+  const discountsVal = discounts !== "" ? parseFloat(discounts) || 0 : totals?.discounts ?? 0;
+  const computedTotal = subtotal + taxVal + gratuityVal + feesVal - discountsVal;
 
   if (isReparsing) {
     return <ParseLoadingState />;
@@ -214,6 +222,34 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: Receipt
           <Input
             value={gratuity}
             onChange={(e) => setGratuity(e.target.value)}
+            placeholder="0.00"
+            type="number"
+            step="0.01"
+            min="0"
+            className="h-7 text-xs w-24 text-right"
+            onBlur={handleSaveTotals}
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-sm gap-2">
+          <span className="text-muted-foreground shrink-0">Fees</span>
+          <Input
+            value={fees}
+            onChange={(e) => setFees(e.target.value)}
+            placeholder="0.00"
+            type="number"
+            step="0.01"
+            min="0"
+            className="h-7 text-xs w-24 text-right"
+            onBlur={handleSaveTotals}
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-sm gap-2">
+          <span className="text-muted-foreground shrink-0">Discounts</span>
+          <Input
+            value={discounts}
+            onChange={(e) => setDiscounts(e.target.value)}
             placeholder="0.00"
             type="number"
             step="0.01"

@@ -53,8 +53,20 @@ export function CostBreakdown({ shares, currency, currentUserId }: CostBreakdown
                 )}
                 {share.gratuity > 0 && (
                   <div className="flex justify-between">
-                    <span>Tip (prorated)</span>
+                    <span>Gratuity (prorated)</span>
                     <span>{formatCurrency(share.gratuity, currency)}</span>
+                  </div>
+                )}
+                {share.fees > 0 && (
+                  <div className="flex justify-between">
+                    <span>Fees (prorated)</span>
+                    <span>{formatCurrency(share.fees, currency)}</span>
+                  </div>
+                )}
+                {share.discounts > 0 && (
+                  <div className="flex justify-between">
+                    <span>Discounts (prorated)</span>
+                    <span>−{formatCurrency(share.discounts, currency)}</span>
                   </div>
                 )}
                 <Separator className="my-1" />

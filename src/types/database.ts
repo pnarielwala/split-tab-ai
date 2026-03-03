@@ -27,6 +27,8 @@ export interface BillTotal {
   subtotal: number | null;
   tax: number | null;
   gratuity: number | null;
+  fees: number | null;
+  discounts: number | null;
   total: number | null;
   currency: string;
 }
@@ -74,5 +76,7 @@ export interface ParticipantShare {
   subtotal: number;
   tax: number;
   gratuity: number;
+  fees: number;
+  discounts: number;
   total: number;
 }

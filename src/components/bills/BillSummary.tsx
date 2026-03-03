@@ -1,6 +1,5 @@
 import { formatCurrency } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import type { LineItem, BillTotal } from "@/types/database";
 
 interface BillSummaryProps {
@@ -16,13 +15,16 @@ export function BillSummary({ lineItems, totals }: BillSummaryProps) {
       {/* Line items */}
       <div className="space-y-0">
         {lineItems.map((item) => (
-          <div key={item.id} className="flex items-start justify-between py-2.5 border-b last:border-b-0">
-            <div className="flex-1 min-w-0 pr-2">
-              <p className="text-sm font-medium">{item.name}</p>
-              {item.quantity !== 1 && (
-                <p className="text-xs text-muted-foreground">
-                  {item.quantity} × {formatCurrency(item.unit_price, currency)}
-                </p>
+          <div key={item.id} className="flex items-center gap-3 py-2.5 border-b last:border-b-0">
+            <span className="text-sm text-muted-foreground shrink-0 w-5 text-center">
+              {item.quantity}
+            </span>
+            <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+              <p className="text-sm font-medium truncate">{item.name}</p>
+              {item.quantity > 1 && (
+                <span className="text-xs text-muted-foreground shrink-0">
+                  × {formatCurrency(item.unit_price, currency)}
+                </span>
               )}
             </div>
             <p className="text-sm font-medium shrink-0">
@@ -58,6 +60,18 @@ export function BillSummary({ lineItems, totals }: BillSummaryProps) {
           <div className="flex justify-between text-muted-foreground">
             <span>Gratuity</span>
             <span>{formatCurrency(totals.gratuity, currency)}</span>
+          </div>
+        )}
+        {totals?.fees != null && totals.fees > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Fees</span>
+            <span>{formatCurrency(totals.fees, currency)}</span>
+          </div>
+        )}
+        {totals?.discounts != null && totals.discounts > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Discounts</span>
+            <span>−{formatCurrency(totals.discounts, currency)}</span>
           </div>
         )}
         <Separator />
