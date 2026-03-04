@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bun create:*)"
+      "Bash(bun create:*)",
+      "Bash(bun add:*)",
+      "Bash(~/.bun/bin/bun add:*)",
+      "Bash(~/.bun/bin/bun run:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)"
     ]
   }
 }
