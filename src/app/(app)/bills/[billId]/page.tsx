@@ -43,6 +43,15 @@ export default async function BillPage({ params }: Props) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const shareUrl = `${appUrl}/join/${billId}`;
 
+  let memberCount = 0;
+  if (isOwner && bill.status === "verified") {
+    const { count } = await supabase
+      .from("bill_members")
+      .select("id", { count: "exact", head: true })
+      .eq("bill_id", billId);
+    memberCount = count ?? 0;
+  }
+
   return (
     <>
       <TopHeader
@@ -65,6 +74,7 @@ export default async function BillPage({ params }: Props) {
               isVerified={bill.status === "verified"}
               shareUrl={shareUrl}
               receiptUrl={bill.receipt_url}
+              memberCount={memberCount}
             />
           </>
         }

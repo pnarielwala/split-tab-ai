@@ -4,6 +4,7 @@ import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { ThemeSelector } from "@/components/account/ThemeSelector";
+import { PaymentMethodsForm } from "@/components/account/PaymentMethodsForm";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -15,7 +16,7 @@ export default async function AccountPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, email, phone")
+    .select("display_name, email, phone, venmo_handle, zelle_id, cashapp_handle, paypal_id")
     .eq("id", user.id)
     .single();
 
@@ -43,6 +44,17 @@ export default async function AccountPage() {
                 <p className="font-medium">{profile?.phone ?? user.phone}</p>
               </div>
             )}
+          </div>
+          <div className="rounded-lg border p-4 space-y-3">
+            <p className="text-sm font-medium">Payment methods</p>
+            <PaymentMethodsForm
+              initialValues={{
+                venmo_handle: profile?.venmo_handle ?? null,
+                zelle_id: profile?.zelle_id ?? null,
+                cashapp_handle: profile?.cashapp_handle ?? null,
+                paypal_id: profile?.paypal_id ?? null,
+              }}
+            />
           </div>
           <div className="rounded-lg border p-4 space-y-2">
             <p className="text-sm font-medium">Appearance</p>

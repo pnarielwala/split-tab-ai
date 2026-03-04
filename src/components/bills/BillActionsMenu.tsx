@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { MoreVertical, QrCode, ImageIcon, Trash2 } from "lucide-react";
+import { MoreVertical, QrCode, ImageIcon, Trash2, Send } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import {
@@ -23,13 +24,16 @@ interface BillActionsMenuProps {
   isVerified: boolean;
   shareUrl: string;
   receiptUrl: string | null;
+  memberCount?: number;
 }
 
-export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUrl, receiptUrl }: BillActionsMenuProps) {
+export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUrl, receiptUrl, memberCount = 0 }: BillActionsMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [requestPaymentOpen, setRequestPaymentOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleDeleteClick() {
@@ -41,6 +45,32 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
     startTransition(async () => {
       await deleteBill(billId);
     });
+  }
+
+  async function handleSendReminders() {
+    setSending(true);
+    try {
+      const res = await fetch("/api/send-payment-reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error === "no_payment_methods") {
+          toast.error("Add payment methods in Account settings first");
+        } else {
+          toast.error("Failed to send texts");
+        }
+        return;
+      }
+      toast.success(`Texts sent to ${data.sent} member${data.sent !== 1 ? "s" : ""}`);
+      setRequestPaymentOpen(false);
+    } catch {
+      toast.error("Failed to send texts");
+    } finally {
+      setSending(false);
+    }
   }
 
   const hasTopItems = isVerified || !!receiptUrl;
@@ -60,6 +90,12 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
           <DropdownMenuItem onClick={() => { setMenuOpen(false); setQrOpen(true); }}>
             <QrCode className="h-4 w-4" />
             Invite
+          </DropdownMenuItem>
+        )}
+        {isVerified && isOwner && (
+          <DropdownMenuItem className="whitespace-nowrap" onClick={() => { setMenuOpen(false); setRequestPaymentOpen(true); }}>
+            <Send className="h-4 w-4" />
+            Request payment
           </DropdownMenuItem>
         )}
         {receiptUrl && (
@@ -105,6 +141,26 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
             </DialogClose>
             <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
               {isPending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={requestPaymentOpen} onOpenChange={setRequestPaymentOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Request payment</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Send a text to {memberCount} member{memberCount !== 1 ? "s" : ""} with
+            their amount owed and your payment info.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setRequestPaymentOpen(false)} disabled={sending}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendReminders} disabled={sending}>
+              {sending ? "Sending…" : "Send texts"}
             </Button>
           </DialogFooter>
         </DialogContent>
