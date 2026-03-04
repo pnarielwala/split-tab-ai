@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { MoreVertical, Share2, ImageIcon, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { MoreVertical, QrCode, ImageIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import {
@@ -15,6 +14,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { deleteBill } from "@/app/actions/bills";
+import { QRDialogContent } from "./QRDialog";
 
 interface BillActionsMenuProps {
   billId: string;
@@ -27,27 +27,10 @@ interface BillActionsMenuProps {
 
 export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUrl, receiptUrl }: BillActionsMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-
-  async function handleShare() {
-    setMenuOpen(false);
-    if (navigator.share) {
-      try {
-        await navigator.share({ url: shareUrl });
-        return;
-      } catch {
-        // cancelled or failed — fall through
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success("Link copied");
-    } catch {
-      toast.error("Could not copy link");
-    }
-  }
 
   function handleDeleteClick() {
     setMenuOpen(false);
@@ -74,9 +57,9 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
         }
       >
         {isVerified && (
-          <DropdownMenuItem onClick={handleShare}>
-            <Share2 className="h-4 w-4" />
-            Share
+          <DropdownMenuItem onClick={() => { setMenuOpen(false); setQrOpen(true); }}>
+            <QrCode className="h-4 w-4" />
+            Invite
           </DropdownMenuItem>
         )}
         {receiptUrl && (
@@ -93,6 +76,10 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
           </DropdownMenuItem>
         )}
       </DropdownMenu>
+
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <QRDialogContent shareUrl={shareUrl} />
+      </Dialog>
 
       {receiptUrl && (
         <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
