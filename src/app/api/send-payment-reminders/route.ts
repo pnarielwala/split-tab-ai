@@ -148,13 +148,16 @@ export async function POST(request: NextRequest) {
       paymentLinks,
     ].join("\n");
 
-    await twilioClient.messages.create({
-      body: message,
-      from: fromNumber,
-      to: phone,
-    });
-
-    sent++;
+    try {
+      await twilioClient.messages.create({ body: message, from: fromNumber, to: phone });
+      sent++;
+    } catch (err: unknown) {
+      // 21610 = recipient opted out via STOP — skip silently, Twilio already blocked them
+      const code = (err as { code?: number }).code;
+      if (code !== 21610) {
+        console.error(`Twilio send failed for ${phone}:`, err);
+      }
+    }
   }
 
   return NextResponse.json({ sent });

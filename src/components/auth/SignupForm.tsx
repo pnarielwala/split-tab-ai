@@ -9,6 +9,14 @@ import { linkUserIdentifiers } from '@/app/actions/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from '@/components/ui/dialog';
 
 export function SignupForm() {
   const router = useRouter();
@@ -20,6 +28,8 @@ export function SignupForm() {
   const [phone, setPhone] = useState('');
   const [delivery, setDelivery] = useState<'email' | 'phone'>('email');
   const [token, setToken] = useState('');
+  const [smsConsent, setSmsConsent] = useState(false);
+  const [consentDialogOpen, setConsentDialogOpen] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -44,6 +54,7 @@ export function SignupForm() {
     if (!email.trim()) newErrors.email = 'Email is required';
     if (!phoneRegex.test(normalizedPhone))
       newErrors.phone = 'Enter a valid phone number (e.g. 555-123-4567)';
+    if (!smsConsent) newErrors.smsConsent = 'You must agree to receive SMS reminders to continue';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -118,6 +129,7 @@ export function SignupForm() {
         email: email.trim() || null,
         phone: phone.trim() || null,
         display_name: `${firstName} ${lastName}`.trim(),
+        sms_consent_given_at: new Date().toISOString(),
       });
       if (upsertError) {
         toast.error('Failed to save profile: ' + upsertError.message);
@@ -267,6 +279,30 @@ export function SignupForm() {
         </div>
       </div>
 
+      <div className="space-y-1">
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={smsConsent}
+            onChange={(e) => setSmsConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border border-input accent-primary cursor-pointer"
+          />
+          <span className="text-sm text-muted-foreground leading-snug">
+            I agree to receive SMS payment reminders from SplitTab.{' '}
+            <button
+              type="button"
+              onClick={() => setConsentDialogOpen(true)}
+              className="text-primary underline underline-offset-4"
+            >
+              Learn more
+            </button>
+          </span>
+        </label>
+        {errors.smsConsent && (
+          <p className="text-xs text-destructive">{errors.smsConsent}</p>
+        )}
+      </div>
+
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? 'Sending code...' : 'Send code'}
       </Button>
@@ -280,6 +316,45 @@ export function SignupForm() {
           Sign in
         </Link>
       </p>
+
+      <Dialog open={consentDialogOpen} onOpenChange={setConsentDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>SMS messaging consent</DialogTitle>
+            <DialogDescription>
+              What you&apos;re agreeing to
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              By checking this box, you consent to receive automated SMS payment
+              reminder messages from SplitTab to the phone number you provided.
+            </p>
+            <p>
+              <strong className="text-foreground">Message types:</strong> You
+              will receive messages when a bill owner requests payment from you,
+              including your amount owed and their payment details.
+            </p>
+            <p>
+              <strong className="text-foreground">Message frequency:</strong>{' '}
+              Message frequency varies based on bill activity.
+            </p>
+            <p>
+              <strong className="text-foreground">Opt-out:</strong> Reply{' '}
+              <strong className="text-foreground">STOP</strong> to any message
+              to unsubscribe. Reply <strong className="text-foreground">HELP</strong>{' '}
+              for help.
+            </p>
+            <p>
+              Message and data rates may apply. Consent is not a condition of
+              purchase or use of the service.
+            </p>
+          </div>
+          <DialogClose asChild>
+            <Button className="w-full">Got it</Button>
+          </DialogClose>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
