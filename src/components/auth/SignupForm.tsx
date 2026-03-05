@@ -298,7 +298,7 @@ export function SignupForm() {
             className="mt-0.5 h-4 w-4 shrink-0 rounded border border-input accent-primary cursor-pointer"
           />
           <span className="text-sm text-muted-foreground leading-snug">
-            I agree to receive SMS payment reminders from SplitTab.{' '}
+            I agree to receive SMS payment reminders from Split Tab AI.{' '}
             <button
               type="button"
               onClick={() => setConsentDialogOpen(true)}
@@ -336,7 +336,7 @@ export function SignupForm() {
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>
               By checking this box, you consent to receive automated SMS payment
-              reminder messages from SplitTab to the phone number you provided.
+              reminder messages from Split Tab AI to the phone number you provided.
             </p>
             <p>
               <strong className="text-foreground">Message types:</strong> You

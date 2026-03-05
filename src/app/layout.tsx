@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SplitTab",
+  title: "Split Tab AI",
   description: "Split restaurant bills with friends",
 };
 
