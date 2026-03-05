@@ -56,7 +56,9 @@ export function SignupForm() {
     if (!email.trim()) newErrors.email = 'Email is required';
     if (!phoneRegex.test(normalizedPhone))
       newErrors.phone = 'Enter a valid phone number (e.g. 555-123-4567)';
-    if (!smsConsent) newErrors.smsConsent = 'You must agree to receive SMS reminders to continue';
+    if (!smsConsent)
+      newErrors.smsConsent =
+        'You must agree to receive SMS reminders to continue';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -115,13 +117,19 @@ export function SignupForm() {
     }
 
     if (user) {
-      const { error: linkError } = await linkUserIdentifiers(
-        user.id,
-        email.trim(),
-        phone.trim()
-      );
-      if (linkError) {
-        toast.error('Failed to link account: ' + linkError);
+      try {
+        const { error: linkError } = await linkUserIdentifiers(
+          user.id,
+          email.trim(),
+          phone.trim()
+        );
+        if (linkError) {
+          toast.error('Failed to link account: ' + linkError);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        toast.error('Failed to link account');
         setLoading(false);
         return;
       }
@@ -323,9 +331,7 @@ export function SignupForm() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>SMS messaging consent</DialogTitle>
-            <DialogDescription>
-              What you&apos;re agreeing to
-            </DialogDescription>
+            <DialogDescription>What you&apos;re agreeing to</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>
@@ -344,8 +350,8 @@ export function SignupForm() {
             <p>
               <strong className="text-foreground">Opt-out:</strong> Reply{' '}
               <strong className="text-foreground">STOP</strong> to any message
-              to unsubscribe. Reply <strong className="text-foreground">HELP</strong>{' '}
-              for help.
+              to unsubscribe. Reply{' '}
+              <strong className="text-foreground">HELP</strong> for help.
             </p>
             <p>
               Message and data rates may apply. Consent is not a condition of
