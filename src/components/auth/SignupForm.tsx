@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { linkUserIdentifiers } from '@/app/actions/auth';
@@ -20,6 +20,8 @@ import {
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next') ?? '/dashboard';
 
   const [step, setStep] = useState<'details' | 'otp'>('details');
   const [firstName, setFirstName] = useState('');
@@ -138,7 +140,7 @@ export function SignupForm() {
       }
     }
 
-    router.push('/dashboard');
+    router.push(next);
     router.refresh();
   }
 

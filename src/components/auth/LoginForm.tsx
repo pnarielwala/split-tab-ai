@@ -237,7 +237,7 @@ export function LoginForm() {
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{' '}
         <Link
-          href="/signup"
+          href={next !== '/dashboard' ? `/signup?next=${encodeURIComponent(next)}` : '/signup'}
           className="text-primary underline underline-offset-4"
         >
           Sign up
