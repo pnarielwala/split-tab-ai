@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -43,8 +44,10 @@ export default async function SplitPage({ params }: Props) {
     }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const shareUrl = `${appUrl}/join/${billId}`;
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const proto = headersList.get("x-forwarded-proto") ?? "https";
+  const shareUrl = `${proto}://${host}/join/${billId}`;
 
   return (
     <>

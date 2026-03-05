@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -40,8 +41,10 @@ export default async function BillPage({ params }: Props) {
 
   const isOwner = bill.owner_id === user.id;
   const status = statusLabels[bill.status] ?? statusLabels.draft;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const shareUrl = `${appUrl}/join/${billId}`;
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const proto = headersList.get("x-forwarded-proto") ?? "https";
+  const shareUrl = `${proto}://${host}/join/${billId}`;
 
   let memberCount = 0;
   if (isOwner && bill.status === "verified") {
