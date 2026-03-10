@@ -327,6 +327,17 @@ export function SignupForm() {
         </Link>
       </p>
 
+      <p className="text-center text-xs text-muted-foreground">
+        By signing up, you agree to our{' '}
+        <Link href="/terms" className="text-primary underline underline-offset-4">
+          Terms
+        </Link>{' '}
+        and{' '}
+        <Link href="/privacy" className="text-primary underline underline-offset-4">
+          Privacy Policy
+        </Link>
+      </p>
+
       <Dialog open={consentDialogOpen} onOpenChange={setConsentDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
