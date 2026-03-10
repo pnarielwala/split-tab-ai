@@ -151,18 +151,37 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
           <DialogHeader>
             <DialogTitle>Request payment</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Send a text to {memberCount} member{memberCount !== 1 ? "s" : ""} with
-            their amount owed and your payment info.
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setRequestPaymentOpen(false)} disabled={sending}>
-              Cancel
-            </Button>
-            <Button onClick={handleSendReminders} disabled={sending}>
-              {sending ? "Sending…" : "Send texts"}
-            </Button>
-          </DialogFooter>
+          {memberCount === 0 ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                No one has joined this bill yet. Invite members first so you can
+                request payment from them.
+              </p>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setRequestPaymentOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => { setRequestPaymentOpen(false); setQrOpen(true); }}>
+                  Invite members
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Send a text to {memberCount} member{memberCount !== 1 ? "s" : ""} with
+                their amount owed and your payment info.
+              </p>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setRequestPaymentOpen(false)} disabled={sending}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSendReminders} disabled={sending}>
+                  {sending ? "Sending…" : "Send texts"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>
