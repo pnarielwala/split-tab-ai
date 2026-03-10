@@ -4,6 +4,7 @@ import type { ParsedReceipt } from "@/types/receipt";
 const PROMPT = `You are a receipt parser. Extract all data from this receipt image.
 Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
 {
+  "restaurantName": string | null,
   "lineItems": [{ "name": string, "quantity": number, "unitPrice": number, "totalPrice": number }],
   "subtotal": number | null,
   "tax": number | null,
@@ -14,6 +15,7 @@ Return ONLY a valid JSON object (no markdown, no explanation) with this exact st
   "currency": "USD",
   "notes": string | null
 }
+For "restaurantName": extract the business or restaurant name from the receipt header. Return null if not identifiable.
 Combine multiple fees (service fee, delivery fee, large party fee, service charge, admin fee, etc.) into a single "fees" value. Combine multiple discounts/coupons/promotions into a single "discounts" value (always a positive number representing the amount subtracted). Combine multiple tax lines (e.g. food sales tax, beverage sales tax, state tax, local tax, etc.) into a single "tax" value by summing them all.
 If a line item has per-item adjustments listed beneath it (e.g. add topping, add flavoring, add-ons, modifications, or item-level discounts/removals), fold those adjustment costs into that line item's totalPrice rather than listing them as separate line items. The unitPrice should reflect the base price and totalPrice should be the final net amount after all adjustments for that item.`;
 

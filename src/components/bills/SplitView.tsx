@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useMemo, useOptimistic, startTransition } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
-import { claimItem, unclaimItem } from "@/app/actions/bills";
-import { getSplitPageData } from "@/app/actions/queries";
-import type { LineItemWithClaims } from "@/types/database";
+import { useMemo, useOptimistic, startTransition } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { formatCurrency } from '@/lib/utils';
+import { claimItem, unclaimItem } from '@/app/actions/bills';
+import { getSplitPageData } from '@/app/actions/queries';
+import type { LineItemWithClaims } from '@/types/database';
 
 interface SplitViewProps {
   billId: string;
@@ -19,16 +19,15 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["split", billId],
+    queryKey: ['split', billId],
     queryFn: () => getSplitPageData(billId),
-    staleTime: 10_000,
   });
 
   const serverItems = data?.lineItems ?? [];
   const totals = data?.totals ?? null;
   const members = data?.members ?? [];
   const ownerProfile = data?.ownerProfile;
-  const currency = totals?.currency ?? "USD";
+  const currency = totals?.currency ?? 'USD';
 
   const participantMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -39,13 +38,13 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
     return map;
   }, [ownerProfile, members]);
 
-  const myName = participantMap.get(currentUserId) ?? "You";
+  const myName = participantMap.get(currentUserId) ?? 'You';
 
   const [optimisticItems, addOptimistic] = useOptimistic(
     serverItems,
     (
       state: LineItemWithClaims[],
-      update: { itemId: string; action: "claim" | "unclaim" }
+      update: { itemId: string; action: 'claim' | 'unclaim' }
     ) =>
       state.map((item) =>
         item.id !== update.itemId
@@ -53,14 +52,14 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
           : {
               ...item,
               bill_item_claims:
-                update.action === "claim"
+                update.action === 'claim'
                   ? [
                       ...item.bill_item_claims,
                       {
-                        id: "",
+                        id: '',
                         item_id: update.itemId,
                         user_id: currentUserId,
-                        claimed_at: "",
+                        claimed_at: '',
                         profiles: {
                           id: currentUserId,
                           display_name: myName,
@@ -82,14 +81,14 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
   function handleToggle(item: LineItemWithClaims) {
     const claimed = isClaimed(item);
     startTransition(async () => {
-      addOptimistic({ itemId: item.id, action: claimed ? "unclaim" : "claim" });
+      addOptimistic({ itemId: item.id, action: claimed ? 'unclaim' : 'claim' });
       if (claimed) {
         await unclaimItem(item.id, billId);
       } else {
         await claimItem(item.id, billId);
       }
-      queryClient.invalidateQueries({ queryKey: ["split", billId] });
-      queryClient.invalidateQueries({ queryKey: ["bill", billId] });
+      queryClient.invalidateQueries({ queryKey: ['split', billId] });
+      queryClient.invalidateQueries({ queryKey: ['bill', billId] });
     });
   }
 
@@ -100,7 +99,9 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
 
     let subtotal = 0;
     for (const item of optimisticItems) {
-      const claimed = item.bill_item_claims.some((c) => c.user_id === currentUserId);
+      const claimed = item.bill_item_claims.some(
+        (c) => c.user_id === currentUserId
+      );
       if (!claimed) continue;
       const splitCount = item.bill_item_claims.length;
       subtotal += item.total_price / splitCount;
@@ -121,7 +122,10 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
           <Skeleton className="h-4 w-32 mb-3" />
           <div className="space-y-0">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 py-3 border-b last:border-b-0">
+              <div
+                key={i}
+                className="flex items-center gap-3 py-3 border-b last:border-b-0"
+              >
                 <Skeleton className="h-5 w-5 rounded-full shrink-0" />
                 <Skeleton className="h-4 flex-1" />
                 <Skeleton className="h-4 w-14 shrink-0" />
@@ -153,8 +157,8 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
                 <span
                   className={`shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                     claimed
-                      ? "bg-primary border-primary"
-                      : "border-muted-foreground/40"
+                      ? 'bg-primary border-primary'
+                      : 'border-muted-foreground/40'
                   }`}
                 >
                   {claimed && (
@@ -169,7 +173,9 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
                       <span className="text-sm text-muted-foreground shrink-0 w-5 text-center">
                         {item.quantity}
                       </span>
-                      <p className="text-sm font-medium truncate">{item.name}</p>
+                      <p className="text-sm font-medium truncate">
+                        {item.name}
+                      </p>
                       {item.quantity > 1 && (
                         <span className="text-xs text-muted-foreground shrink-0">
                           × {formatCurrency(item.unit_price, currency)}
@@ -186,10 +192,15 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
                       {item.bill_item_claims.map((claim) => (
                         <Badge
                           key={claim.user_id}
-                          variant={claim.user_id === currentUserId ? "default" : "secondary"}
+                          variant={
+                            claim.user_id === currentUserId
+                              ? 'default'
+                              : 'secondary'
+                          }
                           className="text-xs h-5"
                         >
-                          {participantMap.get(claim.user_id) ?? claim.profiles.display_name}
+                          {participantMap.get(claim.user_id) ??
+                            claim.profiles.display_name}
                         </Badge>
                       ))}
                     </div>

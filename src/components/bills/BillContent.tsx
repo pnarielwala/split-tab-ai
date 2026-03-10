@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { getBillPageData } from "@/app/actions/queries";
-import { BillSummary } from "@/components/bills/BillSummary";
-import { CostBreakdown } from "@/components/bills/CostBreakdown";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from '@tanstack/react-query';
+import { getBillPageData } from '@/app/actions/queries';
+import { BillSummary } from '@/components/bills/BillSummary';
+import { CostBreakdown } from '@/components/bills/CostBreakdown';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   billId: string;
@@ -13,9 +13,8 @@ interface Props {
 
 export function BillContent({ billId, currentUserId }: Props) {
   const { data, isLoading } = useQuery({
-    queryKey: ["bill", billId],
+    queryKey: ['bill', billId],
     queryFn: () => getBillPageData(billId),
-    staleTime: 30_000,
   });
 
   if (isLoading) {
@@ -38,7 +37,7 @@ export function BillContent({ billId, currentUserId }: Props) {
       {shares.length > 0 && (
         <CostBreakdown
           shares={shares}
-          currency={totals?.currency ?? "USD"}
+          currency={totals?.currency ?? 'USD'}
           currentUserId={currentUserId}
         />
       )}

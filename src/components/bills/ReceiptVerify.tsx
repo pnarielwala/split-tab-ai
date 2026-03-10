@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import { Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { addLineItem, updateBillTotals, confirmBill, clearBillParseData } from "@/app/actions/bills";
+import { addLineItem, updateBillTotals, confirmBill, clearBillParseData, updateBillDetails } from "@/app/actions/bills";
 import { LineItemRow } from "./LineItemRow";
 import { ParseLoadingState } from "./ParseLoadingState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
 import type { LineItem, BillTotal } from "@/types/database";
@@ -17,11 +18,17 @@ interface ReceiptVerifyProps {
   lineItems: LineItem[];
   totals: BillTotal | null;
   receiptUrl: string;
+  initialName: string;
+  initialDescription: string;
 }
 
-export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: ReceiptVerifyProps) {
+export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialName, initialDescription }: ReceiptVerifyProps) {
   const [isPending, startTransition] = useTransition();
   const [isReparsing, setIsReparsing] = useState(false);
+
+  // Bill name + description
+  const [billName, setBillName] = useState(initialName);
+  const [billDescription, setBillDescription] = useState(initialDescription);
 
   // Add item form
   const [showAdd, setShowAdd] = useState(false);
@@ -34,6 +41,14 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: Receipt
   const [gratuity, setGratuity] = useState(totals?.gratuity != null ? String(totals.gratuity) : "");
   const [fees, setFees] = useState(totals?.fees != null ? String(totals.fees) : "");
   const [discounts, setDiscounts] = useState(totals?.discounts != null ? String(totals.discounts) : "");
+
+  async function handleSaveBillDetails() {
+    const fd = new FormData();
+    fd.append("name", billName.trim() || "New Bill");
+    fd.append("description", billDescription);
+    const result = await updateBillDetails(billId, fd);
+    if (result?.error) toast.error(result.error);
+  }
 
   async function handleAddItem() {
     if (!newName.trim() || !newPrice.trim()) {
@@ -132,6 +147,36 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl }: Receipt
 
   return (
     <div className="space-y-4">
+      {/* Bill name + description */}
+      <div className="space-y-2">
+        <div className="space-y-1">
+          <Label htmlFor="bill-name" className="text-sm text-muted-foreground">Bill name</Label>
+          <Input
+            id="bill-name"
+            value={billName}
+            onChange={(e) => setBillName(e.target.value)}
+            placeholder="Restaurant name"
+            className="font-semibold"
+            onBlur={handleSaveBillDetails}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="bill-description" className="text-sm text-muted-foreground">Description (optional)</Label>
+          <Input
+            id="bill-description"
+            value={billDescription}
+            onChange={(e) => setBillDescription(e.target.value)}
+            placeholder="e.g. Dinner with friends"
+            onBlur={handleSaveBillDetails}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Review the items extracted from your receipt. Tap any item to edit.
+        </p>
+      </div>
+
+      <Separator />
+
       {/* Line items */}
       <div>
         {lineItems.map((item) => (

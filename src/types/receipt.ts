@@ -6,6 +6,7 @@ export interface ParsedLineItem {
 }
 
 export interface ParsedReceipt {
+  restaurantName: string | null;
   lineItems: ParsedLineItem[];
   subtotal: number | null;
   tax: number | null;

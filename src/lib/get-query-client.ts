@@ -6,7 +6,7 @@ export const getQueryClient = cache(
     new QueryClient({
       defaultOptions: {
         queries: {
-          staleTime: 60 * 1000,
+          staleTime: 5 * 1000,
           gcTime: Infinity,
         },
       },

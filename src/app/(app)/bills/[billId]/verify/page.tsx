@@ -43,17 +43,13 @@ export default async function VerifyPage({ params }: Props) {
         actions={bill.receipt_url ? <ViewReceiptButton receiptUrl={bill.receipt_url} /> : undefined}
       />
       <PageContainer>
-        <div className="space-y-1 mb-4">
-          <h2 className="font-semibold text-lg">{bill.name}</h2>
-          <p className="text-sm text-muted-foreground">
-            Review the items extracted from your receipt. Tap any item to edit.
-          </p>
-        </div>
         <ReceiptVerify
           billId={billId}
           lineItems={lineItems ?? []}
           totals={totals ?? null}
           receiptUrl={bill.receipt_url ?? ""}
+          initialName={bill.name}
+          initialDescription={bill.description ?? ""}
         />
       </PageContainer>
     </>

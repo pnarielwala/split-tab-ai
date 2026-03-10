@@ -5,6 +5,66 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
+// ── Create placeholder bill (no form — auto-redirects to upload) ──────────────
+
+export async function createPlaceholderBill() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect('/login');
+
+  const { data: bill, error } = await supabase
+    .from('bills')
+    .insert({ owner_id: user.id, name: 'New Bill' })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  redirect(`/bills/${bill.id}/upload`);
+}
+
+// ── Update bill name + description (from verify page) ─────────────────────────
+
+const updateBillDetailsSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100),
+  description: z.string().max(500).optional(),
+});
+
+export async function updateBillDetails(billId: string, formData: FormData) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  const parsed = updateBillDetailsSchema.safeParse({
+    name: formData.get('name'),
+    description: formData.get('description') || undefined,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.errors[0].message };
+  }
+
+  const { error } = await supabase
+    .from('bills')
+    .update({
+      name: parsed.data.name,
+      description: parsed.data.description ?? null,
+    })
+    .eq('id', billId)
+    .eq('owner_id', user.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/bills/${billId}/verify`);
+  revalidatePath(`/bills/${billId}`);
+  return { success: true };
+}
+
 // ── Create bill ──────────────────────────────────────────────────────────────
 
 const createBillSchema = z.object({

@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, useTransition } from "react";
-import { Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useState, useTransition } from 'react';
+import { Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -11,22 +11,31 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-} from "@/components/ui/dialog";
-import { deleteBill } from "@/app/actions/bills";
+} from '@/components/ui/dialog';
+import { deleteBill } from '@/app/actions/bills';
+import { getQueryClient } from '@/lib/get-query-client';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   billId: string;
   billName: string;
-  variant?: "icon" | "full";
+  variant?: 'icon' | 'full';
 }
 
-export function DeleteBillButton({ billId, billName, variant = "icon" }: Props) {
+export function DeleteBillButton({
+  billId,
+  billName,
+  variant = 'icon',
+}: Props) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const queryClient = useQueryClient();
 
   function handleDelete() {
     startTransition(async () => {
       await deleteBill(billId);
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
     });
   }
 
@@ -34,13 +43,13 @@ export function DeleteBillButton({ billId, billName, variant = "icon" }: Props) 
     <>
       <Button
         variant="ghost"
-        size={variant === "icon" ? "icon" : "default"}
+        size={variant === 'icon' ? 'icon' : 'default'}
         onClick={() => setOpen(true)}
         className="text-muted-foreground hover:text-destructive"
         aria-label="Delete bill"
       >
         <Trash2 className="h-4 w-4" />
-        {variant === "full" && <span className="ml-2">Delete</span>}
+        {variant === 'full' && <span className="ml-2">Delete</span>}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -48,8 +57,8 @@ export function DeleteBillButton({ billId, billName, variant = "icon" }: Props) 
           <DialogHeader>
             <DialogTitle>Delete bill?</DialogTitle>
             <DialogDescription>
-              &ldquo;{billName}&rdquo; and all its line items will be permanently
-              deleted. This cannot be undone.
+              &ldquo;{billName}&rdquo; and all its line items will be
+              permanently deleted. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -63,7 +72,7 @@ export function DeleteBillButton({ billId, billName, variant = "icon" }: Props) 
               onClick={handleDelete}
               disabled={isPending}
             >
-              {isPending ? "Deleting…" : "Delete"}
+              {isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -105,5 +105,13 @@ export async function POST(request: NextRequest) {
   // 8. Update bill status → parsed
   await supabase.from("bills").update({ status: "parsed" }).eq("id", billId);
 
+  // 9. Update bill name from restaurant name if present
+  if (parsed.restaurantName?.trim()) {
+    await supabase
+      .from("bills")
+      .update({ name: parsed.restaurantName.trim() })
+      .eq("id", billId);
+  }
+
   return NextResponse.json({ success: true, parsed });
 }
