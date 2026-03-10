@@ -273,7 +273,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
             step="0.01"
             min="0"
             className="h-7 text-xs w-24 text-right"
-            onBlur={handleSaveTotals}
+            onBlur={() => handleSaveTotals()}
           />
         </div>
 
@@ -332,7 +332,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
               step="0.01"
               min="0"
               className="h-7 text-xs w-24 text-right"
-              onBlur={handleSaveTotals}
+              onBlur={() => handleSaveTotals()}
             />
           </div>
         </div>
@@ -347,7 +347,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
             step="0.01"
             min="0"
             className="h-7 text-xs w-24 text-right"
-            onBlur={handleSaveTotals}
+            onBlur={() => handleSaveTotals()}
           />
         </div>
 
@@ -361,7 +361,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
             step="0.01"
             min="0"
             className="h-7 text-xs w-24 text-right"
-            onBlur={handleSaveTotals}
+            onBlur={() => handleSaveTotals()}
           />
         </div>
 
