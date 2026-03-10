@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { ReceiptVerify } from "@/components/bills/ReceiptVerify";
+import { ViewReceiptButton } from "@/components/bills/ViewReceiptButton";
 
 interface Props {
   params: Promise<{ billId: string }>;
@@ -36,7 +37,11 @@ export default async function VerifyPage({ params }: Props) {
 
   return (
     <>
-      <TopHeader title="Verify Receipt" backHref="/dashboard" />
+      <TopHeader
+        title="Verify Receipt"
+        backHref="/dashboard"
+        actions={bill.receipt_url ? <ViewReceiptButton receiptUrl={bill.receipt_url} /> : undefined}
+      />
       <PageContainer>
         <div className="space-y-1 mb-4">
           <h2 className="font-semibold text-lg">{bill.name}</h2>
