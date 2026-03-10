@@ -1,18 +1,24 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardBills } from "@/app/actions/queries";
 import { BillList } from "@/components/bills/BillList";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { DashboardBill } from "@/app/actions/queries";
 
 interface Props {
   currentUserId: string;
 }
 
+async function fetchBills(): Promise<DashboardBill[]> {
+  const res = await fetch("/api/bills");
+  if (!res.ok) throw new Error("Failed to fetch bills");
+  return res.json();
+}
+
 export function DashboardContent({ currentUserId }: Props) {
   const { data: bills, isLoading } = useQuery({
     queryKey: ["bills"],
-    queryFn: getDashboardBills,
+    queryFn: fetchBills,
     staleTime: 30_000,
   });
 
