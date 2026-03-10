@@ -54,7 +54,13 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
   const [gratuity, setGratuity] = useState(totals?.gratuity != null ? String(totals.gratuity) : "");
   const [fees, setFees] = useState(totals?.fees != null ? String(totals.fees) : "");
   const [discounts, setDiscounts] = useState(totals?.discounts != null ? String(totals.discounts) : "");
-  const [selectedTipPct, setSelectedTipPct] = useState<number | null>(null);
+  const [selectedTipPct, setSelectedTipPct] = useState<number | null>(() => {
+    if (totals?.gratuity == null) return null;
+    const initialSubtotal = lineItems.reduce((sum, i) => sum + i.total_price, 0);
+    return [15, 18, 20, 22].find(
+      (pct) => Math.abs((initialSubtotal * pct) / 100 - totals.gratuity!) < 0.005
+    ) ?? null;
+  });
 
   async function handleSaveBillDetails() {
     const fd = new FormData();
@@ -89,10 +95,11 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
     }
   }
 
-  async function handleSaveTotals(silent = false) {
+  async function handleSaveTotals(silent = false, gratuityOverride?: string) {
     const subtotal = lineItems.reduce((sum, i) => sum + i.total_price, 0);
     const taxVal = tax !== "" ? parseFloat(tax) : null;
-    const gratuityVal = gratuity !== "" ? parseFloat(gratuity) : null;
+    const gratuityStr = gratuityOverride !== undefined ? gratuityOverride : gratuity;
+    const gratuityVal = gratuityStr !== "" ? parseFloat(gratuityStr) : null;
     const feesVal = fees !== "" ? parseFloat(fees) : null;
     const discountsVal = discounts !== "" ? parseFloat(discounts) : null;
     const total =
@@ -294,16 +301,16 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
             )}
           </div>
           <div className="flex items-center gap-1">
-            {totals?.gratuity == null && (
-              <>
-                {[15, 18, 20, 22].map((pct) => (
+            {[15, 18, 20, 22].map((pct) => (
                   <button
                     key={pct}
                     type="button"
                     onClick={() => {
                       const amount = (subtotal * pct) / 100;
-                      setGratuity(amount.toFixed(2));
+                      const amountStr = amount.toFixed(2);
+                      setGratuity(amountStr);
                       setSelectedTipPct(pct);
+                      handleSaveTotals(true, amountStr);
                     }}
                     className={`text-xs px-2 py-0.5 rounded border transition-colors ${
                       selectedTipPct === pct
@@ -314,8 +321,6 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
                     {pct}%
                   </button>
                 ))}
-              </>
-            )}
             <Input
               value={gratuity}
               onChange={(e) => {
