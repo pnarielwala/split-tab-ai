@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/server';
 
 // ── Create placeholder bill (no form — auto-redirects to upload) ──────────────
 
-export async function createPlaceholderBill() {
+export async function createPlaceholderBill(): Promise<{ billId: string } | { error: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -22,7 +22,7 @@ export async function createPlaceholderBill() {
     .single();
 
   if (error) return { error: error.message };
-  redirect(`/bills/${bill.id}/upload`);
+  return { billId: bill.id };
 }
 
 // ── Update bill name + description (from verify page) ─────────────────────────
