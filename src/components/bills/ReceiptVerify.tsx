@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { Plus, RefreshCw, Info } from "lucide-react";
 import { toast } from "sonner";
 import { addLineItem, updateBillTotals, confirmBill, clearBillParseData, updateBillDetails } from "@/app/actions/bills";
 import { LineItemRow } from "./LineItemRow";
@@ -25,6 +25,19 @@ interface ReceiptVerifyProps {
 export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialName, initialDescription }: ReceiptVerifyProps) {
   const [isPending, startTransition] = useTransition();
   const [isReparsing, setIsReparsing] = useState(false);
+  const [showGratuityInfo, setShowGratuityInfo] = useState(false);
+  const gratuityInfoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showGratuityInfo) return;
+    function handleClick(e: MouseEvent) {
+      if (gratuityInfoRef.current && !gratuityInfoRef.current.contains(e.target as Node)) {
+        setShowGratuityInfo(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showGratuityInfo]);
 
   // Bill name + description
   const [billName, setBillName] = useState(initialName);
@@ -41,6 +54,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
   const [gratuity, setGratuity] = useState(totals?.gratuity != null ? String(totals.gratuity) : "");
   const [fees, setFees] = useState(totals?.fees != null ? String(totals.fees) : "");
   const [discounts, setDiscounts] = useState(totals?.discounts != null ? String(totals.discounts) : "");
+  const [selectedTipPct, setSelectedTipPct] = useState<number | null>(null);
 
   async function handleSaveBillDetails() {
     const fd = new FormData();
@@ -75,7 +89,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
     }
   }
 
-  async function handleSaveTotals() {
+  async function handleSaveTotals(silent = false) {
     const subtotal = lineItems.reduce((sum, i) => sum + i.total_price, 0);
     const taxVal = tax !== "" ? parseFloat(tax) : null;
     const gratuityVal = gratuity !== "" ? parseFloat(gratuity) : null;
@@ -94,7 +108,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
         total,
         currency: totals?.currency ?? "USD",
       });
-      toast.success("Totals saved");
+      if (!silent) toast.success("Totals saved");
     } catch {
       toast.error("Failed to save totals");
     }
@@ -103,6 +117,7 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
   function handleConfirm() {
     startTransition(async () => {
       try {
+        await handleSaveTotals(true);
         await confirmBill(billId);
       } catch (err) {
         // Next.js redirect() works by throwing internally — don't treat as an error
@@ -263,17 +278,63 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
         </div>
 
         <div className="flex items-center justify-between text-sm gap-2">
-          <span className="text-muted-foreground shrink-0">Gratuity</span>
-          <Input
-            value={gratuity}
-            onChange={(e) => setGratuity(e.target.value)}
-            placeholder="0.00"
-            type="number"
-            step="0.01"
-            min="0"
-            className="h-7 text-xs w-24 text-right"
-            onBlur={handleSaveTotals}
-          />
+          <div className="relative flex items-center gap-1 shrink-0" ref={gratuityInfoRef}>
+            <span className="text-muted-foreground">Gratuity</span>
+            <button
+              type="button"
+              onClick={() => setShowGratuityInfo((v) => !v)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+            {showGratuityInfo && (
+              <div className="absolute left-0 top-full mt-1.5 z-10 w-56 rounded-md border border-border bg-popover p-2.5 text-xs text-muted-foreground shadow-md">
+                Tip should be calculated on the subtotal minus any discounts — not including tax or fees.
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {totals?.gratuity == null && (
+              <>
+                {[15, 18, 20, 22].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => {
+                      const amount = (subtotal * pct) / 100;
+                      setGratuity(amount.toFixed(2));
+                      setSelectedTipPct(pct);
+                    }}
+                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                      selectedTipPct === pct
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground"
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </>
+            )}
+            <Input
+              value={gratuity}
+              onChange={(e) => {
+                const val = e.target.value;
+                setGratuity(val);
+                const parsed = parseFloat(val);
+                const matched = [15, 18, 20, 22].find(
+                  (pct) => Math.abs((subtotal * pct) / 100 - parsed) < 0.005
+                );
+                setSelectedTipPct(matched ?? null);
+              }}
+              placeholder="0.00"
+              type="number"
+              step="0.01"
+              min="0"
+              className="h-7 text-xs w-24 text-right"
+              onBlur={handleSaveTotals}
+            />
+          </div>
         </div>
 
         <div className="flex items-center justify-between text-sm gap-2">
