@@ -22,9 +22,10 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold">How We Use Your Data</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
               We use your information to provide the Split Tab service: creating your account,
-              splitting bills with others, and sending SMS payment reminders. Receipt images are
-              sent to the Google Gemini API for AI-powered parsing. Your phone number is used
-              exclusively to send payment reminders via Twilio when a bill owner requests payment.
+              splitting bills with others, and sending SMS payment reminders. Your email and phone
+              number are used for account verification (OTP sign-in). Receipt images are sent to
+              the Google Gemini API for AI-powered parsing. Your phone number is also used to send
+              payment reminders via Twilio when a bill owner requests payment.
             </p>
           </section>
 
