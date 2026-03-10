@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
@@ -61,6 +62,10 @@ export default async function AccountPage() {
             <ThemeSelector />
           </div>
           <SignOutButton />
+          <div className="flex justify-center gap-4 text-xs">
+            <Link href="/privacy" className="text-primary underline">Privacy Policy</Link>
+            <Link href="/terms" className="text-primary underline">Terms of Service</Link>
+          </div>
         </div>
       </PageContainer>
     </>
