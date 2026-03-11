@@ -96,6 +96,8 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
     const billSubtotal = totals?.subtotal ?? 0;
     const billTax = totals?.tax ?? 0;
     const billGratuity = totals?.gratuity ?? 0;
+    const billFees = totals?.fees ?? 0;
+    const billDiscounts = totals?.discounts ?? 0;
 
     let subtotal = 0;
     for (const item of optimisticItems) {
@@ -112,7 +114,9 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
     const ratio = billSubtotal > 0 ? subtotal / billSubtotal : 0;
     const tax = billTax * ratio;
     const gratuity = billGratuity * ratio;
-    return { subtotal, tax, gratuity, total: subtotal + tax + gratuity };
+    const fees = billFees * ratio;
+    const discounts = billDiscounts * ratio;
+    return { subtotal, tax, gratuity, fees, discounts, total: subtotal + tax + gratuity + fees - discounts };
   }, [optimisticItems, totals, currentUserId]);
 
   if (isLoading) {
@@ -233,6 +237,18 @@ export function SplitView({ billId, currentUserId }: SplitViewProps) {
               <div className="flex justify-between text-muted-foreground">
                 <span>Gratuity (prorated)</span>
                 <span>{formatCurrency(myShare.gratuity, currency)}</span>
+              </div>
+            )}
+            {myShare.fees > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Fees (prorated)</span>
+                <span>{formatCurrency(myShare.fees, currency)}</span>
+              </div>
+            )}
+            {myShare.discounts > 0 && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Discounts (prorated)</span>
+                <span>−{formatCurrency(myShare.discounts, currency)}</span>
               </div>
             )}
             <Separator className="my-1" />
