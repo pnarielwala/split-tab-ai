@@ -60,14 +60,14 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
         if (data.error === "no_payment_methods") {
           toast.error("Add payment methods in Account settings first");
         } else {
-          toast.error("Failed to send texts");
+          toast.error("Failed to send reminders");
         }
         return;
       }
-      toast.success(`Texts sent to ${data.sent} member${data.sent !== 1 ? "s" : ""}`);
+      toast.success(`Reminders sent to ${data.sent} member${data.sent !== 1 ? "s" : ""}`);
       setRequestPaymentOpen(false);
     } catch {
-      toast.error("Failed to send texts");
+      toast.error("Failed to send reminders");
     } finally {
       setSending(false);
     }
@@ -169,7 +169,7 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Send a text to {memberCount} member{memberCount !== 1 ? "s" : ""} with
+                Send a reminder to {memberCount} member{memberCount !== 1 ? "s" : ""} with
                 their amount owed and your payment info.
               </p>
               <DialogFooter className="gap-2">
@@ -177,7 +177,7 @@ export function BillActionsMenu({ billId, billName, isOwner, isVerified, shareUr
                   Cancel
                 </Button>
                 <Button onClick={handleSendReminders} disabled={sending}>
-                  {sending ? "Sending…" : "Send texts"}
+                  {sending ? "Sending…" : "Send reminders"}
                 </Button>
               </DialogFooter>
             </>

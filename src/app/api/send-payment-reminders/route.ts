@@ -1,44 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import twilio from "twilio";
 import { createClient } from "@/lib/supabase/server";
 import { getBillPageData } from "@/app/actions/queries";
-
-interface PaymentMethods {
-  venmo_handle: string | null;
-  zelle_id: string | null;
-  cashapp_handle: string | null;
-  paypal_id: string | null;
-}
-
-function buildPaymentLinks(
-  methods: PaymentMethods,
-  amount: number,
-  billName: string
-): string {
-  const lines: string[] = [];
-  const encodedName = encodeURIComponent(billName);
-  const amountStr = amount.toFixed(2);
-
-  if (methods.venmo_handle) {
-    const handle = methods.venmo_handle.replace(/^@/, "");
-    lines.push(`• Venmo: https://venmo.com/${handle}?txn=pay&amount=${amountStr}&note=${encodedName}`);
-  }
-  if (methods.cashapp_handle) {
-    const tag = methods.cashapp_handle.startsWith("$")
-      ? methods.cashapp_handle.slice(1)
-      : methods.cashapp_handle;
-    lines.push(`• CashApp: https://cash.app/$${tag}/${amountStr}`);
-  }
-  if (methods.paypal_id) {
-    const handle = methods.paypal_id.replace(/^@/, "");
-    lines.push(`• PayPal: https://paypal.me/${handle}/${amountStr}`);
-  }
-  if (methods.zelle_id) {
-    lines.push(`• Zelle: ${methods.zelle_id}`);
-  }
-
-  return lines.join("\n");
-}
+import { sendReminder } from "@/lib/notifications";
+import type { PaymentMethods } from "@/lib/notifications";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -82,10 +46,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to load bill data" }, { status: 500 });
   }
 
-  // Fetch member phone numbers
+  // Fetch member emails
   const { data: membersRaw } = await supabase
     .from("bill_members")
-    .select("user_id, profiles(phone, display_name)")
+    .select("user_id, profiles(email, display_name)")
     .eq("bill_id", billId);
 
   // Fetch owner's payment methods
@@ -115,12 +79,6 @@ export async function POST(request: NextRequest) {
   const ownerName = ownerProfile?.display_name ?? "Your friend";
   const sharesMap = new Map(pageData.shares.map((s) => [s.userId, s]));
 
-  const twilioClient = twilio(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_AUTH_TOKEN
-  );
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER!;
-
   let sent = 0;
 
   for (const memberRaw of membersRaw ?? []) {
@@ -128,36 +86,27 @@ export async function POST(request: NextRequest) {
     if (memberRaw.user_id === user.id) continue;
 
     const profile = (memberRaw.profiles as unknown) as {
-      phone: string | null;
+      email: string | null;
       display_name: string;
     } | null;
 
-    const phone = profile?.phone;
-    if (!phone) continue;
+    const email = profile?.email;
+    if (!email) continue;
 
     const share = sharesMap.get(memberRaw.user_id);
     if (!share || share.total <= 0) continue;
 
-    const paymentLinks = buildPaymentLinks(methods, share.total, bill.name);
-    const memberName = profile?.display_name ?? "there";
+    const ok = await sendReminder({
+      channel: "email",
+      recipientName: profile?.display_name ?? "there",
+      recipientContact: email,
+      ownerName,
+      billName: bill.name,
+      amount: share.total,
+      paymentMethods: methods,
+    });
 
-    const message = [
-      `Hi ${memberName}! You owe $${share.total.toFixed(2)} for "${bill.name}".`,
-      ``,
-      `Pay ${ownerName}:`,
-      paymentLinks,
-    ].join("\n");
-
-    try {
-      await twilioClient.messages.create({ body: message, from: fromNumber, to: phone });
-      sent++;
-    } catch (err: unknown) {
-      // 21610 = recipient opted out via STOP — skip silently, Twilio already blocked them
-      const code = (err as { code?: number }).code;
-      if (code !== 21610) {
-        console.error(`Twilio send failed for ${phone}:`, err);
-      }
-    }
+    if (ok) sent++;
   }
 
   return NextResponse.json({ sent });
