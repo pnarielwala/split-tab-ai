@@ -10,7 +10,7 @@ import type {
   ParticipantShare,
 } from '@/types/database';
 
-export type DashboardBill = Bill & { bill_totals: BillTotal | null };
+export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string };
 
 export type BillPageData = {
   lineItems: LineItemWithClaims[];
@@ -63,6 +63,23 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
       ? (bill.bill_totals[0] ?? null)
       : bill.bill_totals;
     billMap.set(bill.id, { ...bill, bill_totals: totals });
+  }
+
+  const joinedOwnerIds = Array.from(billMap.values())
+    .filter((b) => b.owner_id !== currentUserId)
+    .map((b) => b.owner_id);
+
+  if (joinedOwnerIds.length > 0) {
+    const { data: ownerProfiles } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', joinedOwnerIds);
+    const profileMap = new Map((ownerProfiles ?? []).map((p) => [p.id, p.display_name]));
+    for (const bill of billMap.values()) {
+      if (bill.owner_id !== currentUserId) {
+        bill.owner_display_name = profileMap.get(bill.owner_id);
+      }
+    }
   }
 
   return Array.from(billMap.values()).sort(

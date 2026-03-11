@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { Plus } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
-import { TopHeader } from "@/components/layout/TopHeader";
-import { PageContainer } from "@/components/layout/PageContainer";
-import { DashboardContent } from "@/components/bills/DashboardContent";
+import Link from 'next/link';
+import { Plus } from 'lucide-react';
+import { createClient } from '@/lib/supabase/server';
+import { TopHeader } from '@/components/layout/TopHeader';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { DashboardContent } from '@/components/bills/DashboardContent';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -13,9 +13,9 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <TopHeader title="My Bills" />
+      <TopHeader title="Dashboard" />
       <PageContainer>
-        <DashboardContent currentUserId={user?.id ?? ""} />
+        <DashboardContent currentUserId={user?.id ?? ''} />
       </PageContainer>
 
       {/* FAB */}
