@@ -1,14 +1,12 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { BillContent } from "@/components/bills/BillContent";
+import { BillDetail } from "@/components/bills/BillDetail";
 import { Badge } from "@/components/ui/badge";
-import { BillActionsMenu } from "@/components/bills/BillActionsMenu";
-import { Button } from "@/components/ui/button";
-import { SplitSquareVertical } from "lucide-react";
+import { DeleteBillButton } from "@/components/bills/DeleteBillButton";
 
 interface Props {
   params: Promise<{ billId: string }>;
@@ -40,14 +38,28 @@ export default async function BillPage({ params }: Props) {
   if (!bill) notFound();
 
   const isOwner = bill.owner_id === user.id;
+  const isVerified = bill.status === "verified";
   const status = statusLabels[bill.status] ?? statusLabels.draft;
+
+  // Non-member visiting a verified bill → redirect to join flow
+  if (isVerified && !isOwner) {
+    const { data: membership } = await supabase
+      .from("bill_members")
+      .select("id")
+      .eq("bill_id", billId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (!membership) redirect(`/join/${billId}`);
+  }
+
   const headersList = await headers();
   const host = headersList.get("host");
   const proto = headersList.get("x-forwarded-proto") ?? "https";
   const shareUrl = `${proto}://${host}/join/${billId}`;
 
   let memberCount = 0;
-  if (isOwner && bill.status === "verified") {
+  if (isOwner && isVerified) {
     const { count } = await supabase
       .from("bill_members")
       .select("id", { count: "exact", head: true })
@@ -59,26 +71,13 @@ export default async function BillPage({ params }: Props) {
     <>
       <TopHeader
         backHref="/dashboard"
+        title={isVerified ? "Select your items" : undefined}
         actions={
           <>
             <Badge variant={status.variant}>{status.label}</Badge>
-            {bill.status === "verified" && (
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/bills/${billId}/split`} className="gap-1.5">
-                  <SplitSquareVertical className="h-4 w-4" />
-                  Split
-                </Link>
-              </Button>
+            {isOwner && (
+              <DeleteBillButton billId={billId} billName={bill.name} />
             )}
-            <BillActionsMenu
-              billId={billId}
-              billName={bill.name}
-              isOwner={isOwner}
-              isVerified={bill.status === "verified"}
-              shareUrl={shareUrl}
-              receiptUrl={bill.receipt_url}
-              memberCount={memberCount}
-            />
           </>
         }
       />
@@ -89,7 +88,19 @@ export default async function BillPage({ params }: Props) {
             <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>
           )}
         </div>
-        <BillContent billId={billId} currentUserId={user.id} />
+        {isVerified ? (
+          <BillDetail
+            billId={billId}
+            currentUserId={user.id}
+            isOwner={isOwner}
+            shareUrl={shareUrl}
+            receiptUrl={bill.receipt_url}
+            memberCount={memberCount}
+            billName={bill.name}
+          />
+        ) : (
+          <BillContent billId={billId} />
+        )}
       </PageContainer>
     </>
   );

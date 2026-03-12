@@ -1,0 +1,397 @@
+'use client';
+
+import { useMemo, useOptimistic, startTransition, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
+import { PieChart } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { formatCurrency } from '@/lib/utils';
+import { claimItem, unclaimItem } from '@/app/actions/bills';
+import { getSplitPageData } from '@/app/actions/queries';
+import { ShareButton } from './ShareButton';
+import { ViewReceiptButton } from './ViewReceiptButton';
+import { RequestPaymentButton } from './RequestPaymentButton';
+import type { LineItemWithClaims } from '@/types/database';
+
+interface BillDetailProps {
+  billId: string;
+  currentUserId: string;
+  isOwner: boolean;
+  shareUrl: string;
+  receiptUrl: string | null;
+  memberCount: number;
+  billName: string;
+}
+
+export function BillDetail({
+  billId,
+  currentUserId,
+  isOwner,
+  shareUrl,
+  receiptUrl,
+  memberCount,
+  billName,
+}: BillDetailProps) {
+  const queryClient = useQueryClient();
+  const [youOweOpen, setYouOweOpen] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['split', billId],
+    queryFn: () => getSplitPageData(billId),
+  });
+
+  const serverItems = data?.lineItems ?? [];
+  const totals = data?.totals ?? null;
+  const members = data?.members ?? [];
+  const ownerProfile = data?.ownerProfile;
+  const currency = totals?.currency ?? 'USD';
+
+  const participantMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (ownerProfile) map.set(ownerProfile.id, ownerProfile.display_name);
+    for (const m of members) {
+      map.set(m.user_id, m.profiles.display_name);
+    }
+    return map;
+  }, [ownerProfile, members]);
+
+  const myName = participantMap.get(currentUserId) ?? 'You';
+
+  const [optimisticItems, addOptimistic] = useOptimistic(
+    serverItems,
+    (
+      state: LineItemWithClaims[],
+      update: { itemId: string; action: 'claim' | 'unclaim' }
+    ) =>
+      state.map((item) =>
+        item.id !== update.itemId
+          ? item
+          : {
+              ...item,
+              bill_item_claims:
+                update.action === 'claim'
+                  ? [
+                      ...item.bill_item_claims,
+                      {
+                        id: '',
+                        item_id: update.itemId,
+                        user_id: currentUserId,
+                        claimed_at: '',
+                        profiles: {
+                          id: currentUserId,
+                          display_name: myName,
+                          email: null,
+                        },
+                      },
+                    ]
+                  : item.bill_item_claims.filter(
+                      (c) => c.user_id !== currentUserId
+                    ),
+            }
+      )
+  );
+
+  function isClaimed(item: LineItemWithClaims) {
+    return item.bill_item_claims.some((c) => c.user_id === currentUserId);
+  }
+
+  function handleToggle(item: LineItemWithClaims) {
+    const claimed = isClaimed(item);
+    startTransition(async () => {
+      addOptimistic({ itemId: item.id, action: claimed ? 'unclaim' : 'claim' });
+      if (claimed) {
+        await unclaimItem(item.id, billId);
+      } else {
+        await claimItem(item.id, billId);
+      }
+      queryClient.invalidateQueries({ queryKey: ['split', billId] });
+      queryClient.invalidateQueries({ queryKey: ['bill', billId] });
+    });
+  }
+
+  const myShare = useMemo(() => {
+    const billSubtotal = totals?.subtotal ?? 0;
+    const billTax = totals?.tax ?? 0;
+    const billGratuity = totals?.gratuity ?? 0;
+    const billFees = totals?.fees ?? 0;
+    const billDiscounts = totals?.discounts ?? 0;
+
+    let subtotal = 0;
+    for (const item of optimisticItems) {
+      const claimed = item.bill_item_claims.some(
+        (c) => c.user_id === currentUserId
+      );
+      if (!claimed) continue;
+      const splitCount = item.bill_item_claims.length;
+      subtotal += item.total_price / splitCount;
+    }
+
+    const ratio = billSubtotal > 0 ? subtotal / billSubtotal : 0;
+    const tax = billTax * ratio;
+    const gratuity = billGratuity * ratio;
+    const fees = billFees * ratio;
+    const discounts = billDiscounts * ratio;
+    return {
+      subtotal,
+      tax,
+      gratuity,
+      fees,
+      discounts,
+      total: subtotal + tax + gratuity + fees - discounts,
+    };
+  }, [optimisticItems, totals, currentUserId]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-24 rounded-md" />
+          ))}
+        </div>
+        <div className="space-y-0">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 py-3 border-b last:border-b-0"
+            >
+              <Skeleton className="h-5 w-5 rounded-full shrink-0" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-4 w-14 shrink-0" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const ownerName = ownerProfile?.display_name ?? 'Owner';
+  const ownerPaymentMethods = data?.ownerPaymentMethods ?? null;
+
+  return (
+    <div className="space-y-6">
+      {/* Action buttons row */}
+      <div className="flex flex-wrap gap-2">
+        <ShareButton shareUrl={shareUrl} />
+        {receiptUrl && <ViewReceiptButton receiptUrl={receiptUrl} />}
+        <Button variant="outline" size="sm" asChild className="flex-1">
+          <Link href={`/bills/${billId}/breakdown`} className="gap-1.5">
+            <PieChart className="h-4 w-4" />
+            Split summary
+          </Link>
+        </Button>
+
+        {!isOwner && (
+          <Button
+            className="w-full"
+            variant="outline"
+            size="sm"
+            onClick={() => setYouOweOpen(true)}
+          >
+            You owe {formatCurrency(myShare.total, currency)}
+          </Button>
+        )}
+        {isOwner && (
+          <RequestPaymentButton
+            billId={billId}
+            memberCount={memberCount}
+            shareUrl={shareUrl}
+          />
+        )}
+      </div>
+
+      {/* Item list */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+          Tap to claim items
+        </h2>
+        <div className="space-y-0">
+          {optimisticItems.map((item) => {
+            const claimed = isClaimed(item);
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleToggle(item)}
+                className="w-full text-left border-b last:border-b-0 py-3 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+              >
+                <span
+                  className={`shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    claimed
+                      ? 'bg-primary border-primary'
+                      : 'border-muted-foreground/40'
+                  }`}
+                >
+                  {claimed && (
+                    <span className="h-2 w-2 rounded-full bg-primary-foreground" />
+                  )}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-baseline gap-1.5 min-w-0">
+                      <span className="text-sm text-muted-foreground shrink-0 w-5 text-center">
+                        {item.quantity}
+                      </span>
+                      <p className="text-sm font-medium truncate">
+                        {item.name}
+                      </p>
+                      {item.quantity > 1 && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          × {formatCurrency(item.unit_price, currency)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium shrink-0">
+                      {formatCurrency(item.total_price, currency)}
+                    </p>
+                  </div>
+                  {item.bill_item_claims.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {item.bill_item_claims.map((claim) => (
+                        <Badge
+                          key={claim.user_id}
+                          variant={
+                            claim.user_id === currentUserId
+                              ? 'default'
+                              : 'secondary'
+                          }
+                          className="text-xs h-5"
+                        >
+                          {participantMap.get(claim.user_id) ??
+                            claim.profiles.display_name}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bill totals */}
+      {totals && (
+        <div className="space-y-2 text-sm">
+          {totals.subtotal != null && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Subtotal</span>
+              <span>{formatCurrency(totals.subtotal, currency)}</span>
+            </div>
+          )}
+          {totals.tax != null && totals.tax > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Tax</span>
+              <span>{formatCurrency(totals.tax, currency)}</span>
+            </div>
+          )}
+          {totals.gratuity != null && totals.gratuity > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Gratuity</span>
+              <span>{formatCurrency(totals.gratuity, currency)}</span>
+            </div>
+          )}
+          {totals.fees != null && totals.fees > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Fees</span>
+              <span>{formatCurrency(totals.fees, currency)}</span>
+            </div>
+          )}
+          {totals.discounts != null && totals.discounts > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Discounts</span>
+              <span>−{formatCurrency(totals.discounts, currency)}</span>
+            </div>
+          )}
+          <Separator />
+          <div className="flex justify-between font-semibold text-base">
+            <span>Total</span>
+            <span>{formatCurrency(totals.total, currency)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* You Owe Modal */}
+      {!isOwner && (
+        <Dialog open={youOweOpen} onOpenChange={setYouOweOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>You owe {ownerName}</DialogTitle>
+              <DialogDescription>
+                {formatCurrency(myShare.total, currency)} for {billName}
+              </DialogDescription>
+            </DialogHeader>
+            {ownerPaymentMethods &&
+            (ownerPaymentMethods.venmo_handle ||
+              ownerPaymentMethods.zelle_id ||
+              ownerPaymentMethods.cashapp_handle ||
+              ownerPaymentMethods.paypal_id) ? (
+              <div className="space-y-2">
+                {ownerPaymentMethods.venmo_handle && (
+                  <a
+                    href={`https://venmo.com/${ownerPaymentMethods.venmo_handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+                  >
+                    <span className="font-medium">Venmo</span>
+                    <span className="text-muted-foreground">
+                      @{ownerPaymentMethods.venmo_handle}
+                    </span>
+                  </a>
+                )}
+                {ownerPaymentMethods.cashapp_handle && (
+                  <a
+                    href={`https://cash.app/$${ownerPaymentMethods.cashapp_handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+                  >
+                    <span className="font-medium">Cash App</span>
+                    <span className="text-muted-foreground">
+                      ${ownerPaymentMethods.cashapp_handle}
+                    </span>
+                  </a>
+                )}
+                {ownerPaymentMethods.zelle_id && (
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                    <span className="font-medium">Zelle</span>
+                    <span className="text-muted-foreground">
+                      {ownerPaymentMethods.zelle_id}
+                    </span>
+                  </div>
+                )}
+                {ownerPaymentMethods.paypal_id && (
+                  <a
+                    href={`https://paypal.me/${ownerPaymentMethods.paypal_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+                  >
+                    <span className="font-medium">PayPal</span>
+                    <span className="text-muted-foreground">
+                      {ownerPaymentMethods.paypal_id}
+                    </span>
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                The bill owner hasn&apos;t added payment methods yet.
+              </p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}

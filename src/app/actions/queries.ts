@@ -9,6 +9,7 @@ import type {
   Profile,
   ParticipantShare,
 } from '@/types/database';
+import type { PaymentMethods } from '@/lib/notifications/types';
 
 export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string };
 
@@ -25,6 +26,7 @@ export type SplitPageData = {
   totals: BillTotal | null;
   members: BillMemberWithProfile[];
   ownerProfile: Profile;
+  ownerPaymentMethods: PaymentMethods | null;
 };
 
 export async function getDashboardBills(): Promise<DashboardBill[]> {
@@ -202,6 +204,17 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     supabase.from('profiles').select('*').eq('id', bill.owner_id).single(),
   ]);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = ownerProfileRaw as any;
+  const ownerPaymentMethods: PaymentMethods | null = ownerProfileRaw
+    ? {
+        venmo_handle: raw.venmo_handle ?? null,
+        zelle_id: raw.zelle_id ?? null,
+        cashapp_handle: raw.cashapp_handle ?? null,
+        paypal_id: raw.paypal_id ?? null,
+      }
+    : null;
+
   return {
     lineItems: (lineItemsRaw ?? []) as LineItemWithClaims[],
     totals: totals ?? null,
@@ -211,5 +224,6 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
       email: null,
       display_name: 'Owner',
     }) as Profile,
+    ownerPaymentMethods,
   };
 }

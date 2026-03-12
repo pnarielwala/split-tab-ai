@@ -268,8 +268,8 @@ export async function joinBill(billId: string) {
     // 23505 = unique_violation (already a member) — that's fine
     if (error && error.code !== '23505') return { error: error.message };
   }
-  revalidatePath(`/bills/${billId}/split`);
-  redirect(`/bills/${billId}/split`);
+  revalidatePath(`/bills/${billId}`);
+  redirect(`/bills/${billId}`);
 }
 
 // ── Claim item ────────────────────────────────────────────────────────────────

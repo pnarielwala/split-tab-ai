@@ -1,16 +1,14 @@
 import { redirect, notFound } from "next/navigation";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { SplitView } from "@/components/bills/SplitView";
-import { ShareButton } from "@/components/bills/ShareButton";
+import { BreakdownContent } from "@/components/bills/BreakdownContent";
 
 interface Props {
   params: Promise<{ billId: string }>;
 }
 
-export default async function SplitPage({ params }: Props) {
+export default async function BreakdownPage({ params }: Props) {
   const { billId } = await params;
   const supabase = await createClient();
 
@@ -18,19 +16,18 @@ export default async function SplitPage({ params }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect(`/login?next=/bills/${billId}/split`);
+  if (!user) redirect(`/login?next=/bills/${billId}/breakdown`);
 
   const { data: bill } = await supabase
     .from("bills")
-    .select("*")
+    .select("owner_id, status")
     .eq("id", billId)
     .single();
 
   if (!bill) notFound();
+  if (bill.status !== "verified") redirect(`/bills/${billId}`);
 
   const isOwner = bill.owner_id === user.id;
-
-  // Non-member, non-owner → redirect to join
   if (!isOwner) {
     const { data: membership } = await supabase
       .from("bill_members")
@@ -38,26 +35,14 @@ export default async function SplitPage({ params }: Props) {
       .eq("bill_id", billId)
       .eq("user_id", user.id)
       .single();
-
-    if (!membership) {
-      redirect(`/join/${billId}`);
-    }
+    if (!membership) redirect(`/bills/${billId}`);
   }
-
-  const headersList = await headers();
-  const host = headersList.get("host");
-  const proto = headersList.get("x-forwarded-proto") ?? "https";
-  const shareUrl = `${proto}://${host}/join/${billId}`;
 
   return (
     <>
-      <TopHeader
-        title={bill.name}
-        backHref={`/bills/${billId}`}
-        actions={isOwner ? <ShareButton shareUrl={shareUrl} /> : undefined}
-      />
+      <TopHeader title="Split summary" backHref={`/bills/${billId}`} />
       <PageContainer>
-        <SplitView billId={billId} currentUserId={user.id} />
+        <BreakdownContent billId={billId} currentUserId={user.id} />
       </PageContainer>
     </>
   );

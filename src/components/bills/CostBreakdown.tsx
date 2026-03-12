@@ -12,13 +12,19 @@ interface CostBreakdownProps {
 export function CostBreakdown({ shares, currency, currentUserId }: CostBreakdownProps) {
   if (shares.length === 0) return null;
 
+  const sorted = [...shares].sort((a, b) => {
+    if (a.userId === currentUserId) return -1;
+    if (b.userId === currentUserId) return 1;
+    return b.total - a.total;
+  });
+
   return (
     <div>
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-        Cost breakdown
-      </h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Each person&apos;s share of the bill based on what they claimed, with tax and fees prorated proportionally.
+      </p>
       <div className="space-y-3">
-        {shares.map((share) => {
+        {sorted.map((share) => {
           const isMe = share.userId === currentUserId;
           return (
             <Card

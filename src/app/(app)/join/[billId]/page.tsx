@@ -29,12 +29,12 @@ export default async function JoinBillPage({ params }: Props) {
 
   if (!bill) notFound();
 
-  // Owner → skip join, go directly to split
+  // Owner → skip join, go directly to bill
   if (bill.owner_id === user.id) {
-    redirect(`/bills/${billId}/split`);
+    redirect(`/bills/${billId}`);
   }
 
-  // Already a member → go to split
+  // Already a member → go to bill
   const { data: existing } = await supabase
     .from("bill_members")
     .select("id")
@@ -43,7 +43,7 @@ export default async function JoinBillPage({ params }: Props) {
     .single();
 
   if (existing) {
-    redirect(`/bills/${billId}/split`);
+    redirect(`/bills/${billId}`);
   }
 
   // Count existing participants (owner + members)
