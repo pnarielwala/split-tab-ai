@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { NavThemeToggle } from '@/components/landing/NavThemeToggle';
 import { Camera, CheckSquare, Calculator, Mail, Receipt } from 'lucide-react';
 
-export function LandingPage({ isLoggedIn }: { isLoggedIn?: boolean }) {
+export function LandingPage({ displayName }: { displayName?: string }) {
   return (
     <div className="landing min-h-screen bg-background">
       {/* Navbar */}
@@ -18,7 +18,7 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn?: boolean }) {
             <div className="hidden sm:block">
               <NavThemeToggle />
             </div>
-            {isLoggedIn ? (
+            {displayName ? (
               <Button size="sm" asChild>
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
@@ -56,12 +56,20 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn?: boolean }) {
           </p>
 
           <div className="mb-16 flex flex-wrap items-center justify-center gap-3">
-            <Button size="lg" asChild>
-              <Link href="/signup">Get Started Free</Link>
-            </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
+            {displayName ? (
+              <Button size="lg" asChild>
+                <Link href="/dashboard">Go to Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button size="lg" asChild>
+                  <Link href="/signup">Get Started Free</Link>
+                </Button>
+                <Button size="lg" variant="outline" asChild>
+                  <Link href="/login">Sign In</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* App mockup */}
@@ -183,11 +191,15 @@ export function LandingPage({ isLoggedIn }: { isLoggedIn?: boolean }) {
               Join groups already using Split Tab AI to keep bills fair.
             </p>
             <Button size="lg" asChild>
-              <Link href="/signup">Get Started Free</Link>
+              <Link href={displayName ? '/dashboard' : '/signup'}>
+                {displayName ? 'Go to Dashboard' : 'Get Started Free'}
+              </Link>
             </Button>
-            <p className="mt-4 text-xs text-muted-foreground">
-              No credit card required
-            </p>
+            {!displayName && (
+              <p className="mt-4 text-xs text-muted-foreground">
+                No credit card required
+              </p>
+            )}
           </div>
         </div>
       </section>

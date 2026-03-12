@@ -7,5 +7,15 @@ export default async function RootPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return <LandingPage isLoggedIn={!!user} />;
+  let displayName: string | undefined;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .single();
+    displayName = profile?.display_name ?? undefined;
+  }
+
+  return <LandingPage displayName={displayName} />;
 }
