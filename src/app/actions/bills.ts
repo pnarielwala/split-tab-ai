@@ -341,6 +341,77 @@ export async function updateBillPayer(
   return { success: true };
 }
 
+// ── Mark as paid ─────────────────────────────────────────────────────────────
+
+export async function markAsPaid(
+  billId: string,
+  userId?: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  const targetUserId = userId ?? user.id;
+
+  // If marking someone else, verify current user is the payer
+  if (targetUserId !== user.id) {
+    const { data: bill } = await supabase
+      .from('bills')
+      .select('payer_id')
+      .eq('id', billId)
+      .single();
+    if (!bill || bill.payer_id !== user.id) {
+      return { error: 'Only the payer can mark others as paid' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('bill_payments')
+    .insert({ bill_id: billId, user_id: targetUserId });
+
+  // 23505 = unique_violation (already marked paid) — that's fine
+  if (error && error.code !== '23505') return { error: error.message };
+  return { success: true };
+}
+
+// ── Mark as unpaid ────────────────────────────────────────────────────────────
+
+export async function markAsUnpaid(
+  billId: string,
+  userId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  // If unmarking someone else, verify current user is the payer
+  if (userId !== user.id) {
+    const { data: bill } = await supabase
+      .from('bills')
+      .select('payer_id')
+      .eq('id', billId)
+      .single();
+    if (!bill || bill.payer_id !== user.id) {
+      return { error: 'Only the payer can unmark others as paid' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('bill_payments')
+    .delete()
+    .eq('bill_id', billId)
+    .eq('user_id', userId);
+
+  if (error) return { error: error.message };
+  return { success: true };
+}
+
 // ── Unclaim item ──────────────────────────────────────────────────────────────
 
 export async function unclaimItem(itemId: string, billId: string) {

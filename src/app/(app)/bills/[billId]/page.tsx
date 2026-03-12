@@ -58,15 +58,6 @@ export default async function BillPage({ params }: Props) {
   const proto = headersList.get("x-forwarded-proto") ?? "https";
   const shareUrl = `${proto}://${host}/join/${billId}`;
 
-  let memberCount = 0;
-  if (isOwner && isVerified) {
-    const { count } = await supabase
-      .from("bill_members")
-      .select("id", { count: "exact", head: true })
-      .eq("bill_id", billId);
-    memberCount = count ?? 0;
-  }
-
   return (
     <>
       <TopHeader
@@ -95,7 +86,6 @@ export default async function BillPage({ params }: Props) {
             isOwner={isOwner}
             shareUrl={shareUrl}
             receiptUrl={bill.receipt_url}
-            memberCount={memberCount}
             billName={bill.name}
           />
         ) : (

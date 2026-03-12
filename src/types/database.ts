@@ -71,6 +71,13 @@ export interface LineItemWithClaims extends LineItem {
   bill_item_claims: BillItemClaimWithProfile[];
 }
 
+export interface BillPayment {
+  id: string;
+  bill_id: string;
+  user_id: string;
+  paid_at: string;
+}
+
 export interface ParticipantShare {
   userId: string;
   displayName: string;

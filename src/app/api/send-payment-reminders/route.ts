@@ -14,14 +14,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { billId: string };
+  let body: { billId: string; userIds?: string[] };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { billId } = body;
+  const { billId, userIds } = body;
   if (!billId) {
     return NextResponse.json({ error: "Missing billId" }, { status: 400 });
   }
@@ -92,6 +92,9 @@ export async function POST(request: NextRequest) {
   for (const memberRaw of membersRaw ?? []) {
     // Skip the payer (they don't owe themselves)
     if (memberRaw.user_id === payerId) continue;
+
+    // If specific userIds requested, skip others
+    if (userIds && userIds.length > 0 && !userIds.includes(memberRaw.user_id)) continue;
 
     const profile = (memberRaw.profiles as unknown) as {
       email: string | null;

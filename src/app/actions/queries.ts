@@ -19,6 +19,8 @@ export type BillPageData = {
   members: BillMemberWithProfile[];
   ownerProfile: Profile;
   shares: ParticipantShare[];
+  paidUserIds: string[];
+  payerId: string;
 };
 
 export type SplitPageData = {
@@ -29,6 +31,7 @@ export type SplitPageData = {
   ownerPaymentMethods: PaymentMethods | null;
   payerProfile: Profile;
   payerPaymentMethods: PaymentMethods | null;
+  paidUserIds: string[];
 };
 
 export async function getDashboardBills(): Promise<DashboardBill[]> {
@@ -105,11 +108,16 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
     .single();
   if (!bill) return null;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const billAny = bill as any;
+  const payerId: string = billAny.payer_id ?? bill.owner_id;
+
   const [
     { data: lineItemsRaw },
     { data: totals },
     { data: membersRaw },
     { data: ownerProfile },
+    { data: paymentsRaw },
   ] = await Promise.all([
     supabase
       .from('line_items')
@@ -119,6 +127,7 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
     supabase.from('bill_totals').select('*').eq('bill_id', billId).single(),
     supabase.from('bill_members').select('*, profiles(*)').eq('bill_id', billId),
     supabase.from('profiles').select('*').eq('id', bill.owner_id).single(),
+    supabase.from('bill_payments').select('user_id').eq('bill_id', billId),
   ]);
 
   const lineItems = (lineItemsRaw ?? []) as LineItemWithClaims[];
@@ -163,6 +172,8 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
   }
   shares.sort((a, b) => b.total - a.total);
 
+  const paidUserIds = (paymentsRaw ?? []).map((p) => p.user_id);
+
   return {
     lineItems,
     totals: totals ?? null,
@@ -173,6 +184,8 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
       display_name: 'Owner',
     }) as Profile,
     shares,
+    paidUserIds,
+    payerId,
   };
 }
 
@@ -220,6 +233,7 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     { data: membersRaw },
     { data: ownerProfileRaw },
     { data: payerProfileRawMaybe },
+    { data: paymentsRaw },
   ] = await Promise.all([
     supabase
       .from('line_items')
@@ -230,6 +244,7 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     supabase.from('bill_members').select('*, profiles(*)').eq('bill_id', billId),
     supabase.from('profiles').select('*').eq('id', ownerId).single(),
     fetchPayerProfile,
+    supabase.from('bill_payments').select('user_id').eq('bill_id', billId),
   ]);
 
   const ownerPaymentMethods = extractPaymentMethods(ownerProfileRaw);
@@ -251,6 +266,8 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     payerPaymentMethods = ownerPaymentMethods;
   }
 
+  const paidUserIds = (paymentsRaw ?? []).map((p) => p.user_id);
+
   return {
     lineItems: (lineItemsRaw ?? []) as LineItemWithClaims[],
     totals: totals ?? null,
@@ -259,5 +276,6 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     ownerPaymentMethods,
     payerProfile,
     payerPaymentMethods,
+    paidUserIds,
   };
 }

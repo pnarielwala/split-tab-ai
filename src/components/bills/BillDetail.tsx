@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useOptimistic, startTransition, useState } from 'react';
+import { useMemo, useOptimistic, startTransition, useState, useTransition } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { PieChart } from 'lucide-react';
@@ -16,7 +16,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/utils';
-import { claimItem, unclaimItem } from '@/app/actions/bills';
+import { claimItem, unclaimItem, markAsPaid, markAsUnpaid } from '@/app/actions/bills';
 import { getSplitPageData } from '@/app/actions/queries';
 import { ShareButton } from './ShareButton';
 import { ViewReceiptButton } from './ViewReceiptButton';
@@ -30,7 +30,6 @@ interface BillDetailProps {
   isOwner: boolean;
   shareUrl: string;
   receiptUrl: string | null;
-  memberCount: number;
   billName: string;
 }
 
@@ -40,11 +39,11 @@ export function BillDetail({
   isOwner,
   shareUrl,
   receiptUrl,
-  memberCount,
   billName,
 }: BillDetailProps) {
   const queryClient = useQueryClient();
   const [youOweOpen, setYouOweOpen] = useState(false);
+  const [isPaidPending, startPaidTransition] = useTransition();
 
   const { data, isLoading } = useQuery({
     queryKey: ['split', billId],
@@ -57,7 +56,9 @@ export function BillDetail({
   const ownerProfile = data?.ownerProfile;
   const payerProfile = data?.payerProfile;
   const payerPaymentMethods = data?.payerPaymentMethods ?? null;
+  const paidUserIds = data?.paidUserIds ?? [];
   const isPayer = currentUserId === payerProfile?.id;
+  const isCurrentUserPaid = paidUserIds.includes(currentUserId);
   const currency = totals?.currency ?? 'USD';
 
   const participantMap = useMemo(() => {
@@ -110,6 +111,7 @@ export function BillDetail({
   }
 
   function handleToggle(item: LineItemWithClaims) {
+    if (isCurrentUserPaid) return;
     const claimed = isClaimed(item);
     startTransition(async () => {
       addOptimistic({ itemId: item.id, action: claimed ? 'unclaim' : 'claim' });
@@ -222,18 +224,37 @@ export function BillDetail({
             {!isPayer && (
               <Button
                 className="w-full"
-                variant={myShare.total > 0 ? 'default' : 'outline'}
+                variant={isCurrentUserPaid ? 'outline' : myShare.total > 0 ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setYouOweOpen(true)}
               >
-                You owe {formatCurrency(myShare.total, currency)}
+                {isCurrentUserPaid
+                  ? "You're settled up!"
+                  : `You owe ${formatCurrency(myShare.total, currency)}`}
               </Button>
             )}
             {isPayer && (
               <RequestPaymentButton
                 billId={billId}
-                memberCount={memberCount}
                 shareUrl={shareUrl}
+                members={[
+                  ...(ownerProfile && ownerProfile.id !== payerProfile?.id
+                    ? [{ userId: ownerProfile.id, displayName: ownerProfile.display_name, isPaid: paidUserIds.includes(ownerProfile.id) }]
+                    : []),
+                  ...members.map((m) => ({
+                    userId: m.user_id,
+                    displayName: m.profiles.display_name,
+                    isPaid: paidUserIds.includes(m.user_id),
+                  })),
+                ]}
+                onTogglePaid={async (userId, isPaid) => {
+                  if (isPaid) {
+                    await markAsUnpaid(billId, userId);
+                  } else {
+                    await markAsPaid(billId, userId);
+                  }
+                  queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                }}
               />
             )}
           </div>
@@ -243,7 +264,7 @@ export function BillDetail({
       {/* Item list */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          Tap to claim items
+          {isCurrentUserPaid ? 'Your claimed items' : 'Tap to claim items'}
         </h2>
         <div className="space-y-0">
           {optimisticItems.map((item) => {
@@ -252,19 +273,22 @@ export function BillDetail({
               <button
                 key={item.id}
                 onClick={() => handleToggle(item)}
-                className="w-full text-left border-b last:border-b-0 py-3 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors"
+                disabled={isCurrentUserPaid}
+                className="w-full text-left border-b last:border-b-0 py-3 flex items-center gap-3 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:pointer-events-none disabled:opacity-75"
               >
-                <span
-                  className={`shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                    claimed
-                      ? 'bg-primary border-primary'
-                      : 'border-muted-foreground/40'
-                  }`}
-                >
-                  {claimed && (
-                    <span className="h-2 w-2 rounded-full bg-primary-foreground" />
-                  )}
-                </span>
+                {!isCurrentUserPaid && (
+                  <span
+                    className={`shrink-0 h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      claimed
+                        ? 'bg-primary border-primary'
+                        : 'border-muted-foreground/40'
+                    }`}
+                  >
+                    {claimed && (
+                      <span className="h-2 w-2 rounded-full bg-primary-foreground" />
+                    )}
+                  </span>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-2">
                     <div className="flex items-baseline gap-1.5 min-w-0">
@@ -445,6 +469,41 @@ export function BillDetail({
                 {payerName} hasn&apos;t added payment methods yet.
               </p>
             )}
+            <div className="mt-4 pt-3 border-t flex items-center justify-between">
+              {isCurrentUserPaid ? (
+                <>
+                  <span className="text-sm text-green-600 font-medium">Settled up ✓</span>
+                  <button
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors disabled:opacity-50"
+                    disabled={isPaidPending}
+                    onClick={() => {
+                      startPaidTransition(async () => {
+                        await markAsUnpaid(billId, currentUserId);
+                        queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                      });
+                    }}
+                  >
+                    Unmark
+                  </button>
+                </>
+              ) : (
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPaidPending}
+                  onClick={() => {
+                    startPaidTransition(async () => {
+                      await markAsPaid(billId);
+                      queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                      setYouOweOpen(false);
+                    });
+                  }}
+                >
+                  {isPaidPending ? 'Saving…' : 'Mark as paid'}
+                </Button>
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       )}

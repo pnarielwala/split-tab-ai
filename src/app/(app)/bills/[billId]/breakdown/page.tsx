@@ -20,7 +20,7 @@ export default async function BreakdownPage({ params }: Props) {
 
   const { data: bill } = await supabase
     .from("bills")
-    .select("owner_id, status")
+    .select("owner_id, payer_id, status")
     .eq("id", billId)
     .single();
 
@@ -38,11 +38,15 @@ export default async function BreakdownPage({ params }: Props) {
     if (!membership) redirect(`/bills/${billId}`);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const billAny = bill as any;
+  const isPayer = (billAny.payer_id ?? bill.owner_id) === user.id;
+
   return (
     <>
       <TopHeader title="Split summary" backHref={`/bills/${billId}`} />
       <PageContainer>
-        <BreakdownContent billId={billId} currentUserId={user.id} />
+        <BreakdownContent billId={billId} currentUserId={user.id} isPayer={isPayer} />
       </PageContainer>
     </>
   );
