@@ -26,6 +26,7 @@ interface Member {
 
 interface RequestPaymentButtonProps {
   billId: string;
+  billName: string;
   shareUrl: string;
   members: Member[];
   currency?: string;
@@ -34,6 +35,7 @@ interface RequestPaymentButtonProps {
 
 export function RequestPaymentButton({
   billId,
+  billName,
   shareUrl,
   members,
   currency = 'USD',
@@ -245,7 +247,7 @@ export function RequestPaymentButton({
       </Dialog>
 
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-        <QRDialogContent shareUrl={shareUrl} />
+        <QRDialogContent shareUrl={shareUrl} billName={billName} />
       </Dialog>
     </>
   );

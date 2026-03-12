@@ -188,7 +188,7 @@ export function BillDetail({
     <div className="space-y-6">
       {/* Action buttons row */}
       <div className="flex flex-wrap gap-2">
-        <ShareButton shareUrl={shareUrl} />
+        <ShareButton shareUrl={shareUrl} billName={billName} />
         {receiptUrl && <ViewReceiptButton receiptUrl={receiptUrl} />}
         <Button variant="outline" size="sm" asChild className="flex-1">
           <Link href={`/bills/${billId}/breakdown`} className="gap-1.5">
@@ -237,6 +237,7 @@ export function BillDetail({
             {isPayer && (
               <RequestPaymentButton
                 billId={billId}
+                billName={billName}
                 shareUrl={shareUrl}
                 currency={currency}
                 members={[

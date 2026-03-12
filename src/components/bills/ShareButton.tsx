@@ -7,9 +7,10 @@ import { QRDialogContent } from './QRDialog';
 
 interface ShareButtonProps {
   shareUrl: string;
+  billName: string;
 }
 
-export function ShareButton({ shareUrl }: ShareButtonProps) {
+export function ShareButton({ shareUrl, billName }: ShareButtonProps) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -18,7 +19,7 @@ export function ShareButton({ shareUrl }: ShareButtonProps) {
           Invite
         </Button>
       </DialogTrigger>
-      <QRDialogContent shareUrl={shareUrl} />
+      <QRDialogContent shareUrl={shareUrl} billName={billName} />
     </Dialog>
   );
 }
