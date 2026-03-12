@@ -6,7 +6,9 @@
       "Bash(~/.bun/bin/bun add:*)",
       "Bash(~/.bun/bin/bun run:*)",
       "Bash(cat:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "WebFetch(domain:resend.com)"
     ]
   }
 }
