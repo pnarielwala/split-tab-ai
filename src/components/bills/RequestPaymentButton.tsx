@@ -10,8 +10,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import Link from 'next/link';
 import { QRDialogContent } from './QRDialog';
 import { formatCurrency } from '@/lib/utils';
 
@@ -131,6 +133,12 @@ export function RequestPaymentButton({
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Request payment</DialogTitle>
+            <DialogDescription>
+              Send an email reminder to unpaid members with your payment links.{' '}
+              <Link href="/account" className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors" onClick={() => setRequestOpen(false)}>
+                Update your payment links
+              </Link>
+            </DialogDescription>
           </DialogHeader>
 
           {members.length === 0 ? (
