@@ -1,8 +1,8 @@
 import { BillCard } from "./BillCard";
-import type { Bill, BillTotal } from "@/types/database";
+import type { DashboardBill } from "@/app/actions/queries";
 
 interface BillListProps {
-  bills: (Bill & { bill_totals: BillTotal | null; owner_display_name?: string })[];
+  bills: DashboardBill[];
   currentUserId?: string;
 }
 
