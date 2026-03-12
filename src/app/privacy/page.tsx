@@ -1,10 +1,31 @@
-import { BackButton } from '@/components/BackButton';
+import Link from 'next/link';
+import { Receipt } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { NavThemeToggle } from '@/components/landing/NavThemeToggle';
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <Link href="/" className="flex items-center gap-2">
+            <Receipt className="h-5 w-5 text-primary" />
+            <span className="text-lg font-semibold">Split Tab AI</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:block">
+              <NavThemeToggle />
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/login">Sign In</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/signup">Get Started</Link>
+            </Button>
+          </div>
+        </div>
+      </header>
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <BackButton />
 
         <h1 className="text-2xl font-bold mb-1">Privacy Policy</h1>
         <p className="text-sm text-muted-foreground mb-8">Effective date: March 10, 2026</p>
