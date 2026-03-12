@@ -26,17 +26,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing billId" }, { status: 400 });
   }
 
-  // Ownership check
+  // Payer check (only the payer can request payment)
   const { data: bill } = await supabase
     .from("bills")
-    .select("id, name, owner_id")
+    .select("id, name, owner_id, payer_id")
     .eq("id", billId)
     .single();
 
   if (!bill) {
     return NextResponse.json({ error: "Bill not found" }, { status: 404 });
   }
-  if (bill.owner_id !== user.id) {
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const billData = bill as any;
+  const payerId: string = billData.payer_id ?? billData.owner_id;
+
+  if (payerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -52,18 +57,21 @@ export async function POST(request: NextRequest) {
     .select("user_id, profiles(email, display_name)")
     .eq("bill_id", billId);
 
-  // Fetch owner's payment methods
-  const { data: ownerProfile } = await supabase
+  // Fetch payer's payment methods
+  const { data: payerProfile } = await supabase
     .from("profiles")
     .select("display_name, venmo_handle, zelle_id, cashapp_handle, paypal_id")
-    .eq("id", user.id)
+    .eq("id", payerId)
     .single();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payerRaw = payerProfile as any;
+
   const methods: PaymentMethods = {
-    venmo_handle: ownerProfile?.venmo_handle ?? null,
-    zelle_id: ownerProfile?.zelle_id ?? null,
-    cashapp_handle: ownerProfile?.cashapp_handle ?? null,
-    paypal_id: ownerProfile?.paypal_id ?? null,
+    venmo_handle: payerRaw?.venmo_handle ?? null,
+    zelle_id: payerRaw?.zelle_id ?? null,
+    cashapp_handle: payerRaw?.cashapp_handle ?? null,
+    paypal_id: payerRaw?.paypal_id ?? null,
   };
 
   const hasPaymentMethod =
@@ -76,14 +84,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "no_payment_methods" }, { status: 400 });
   }
 
-  const ownerName = ownerProfile?.display_name ?? "Your friend";
+  const ownerName = payerRaw?.display_name ?? "Your friend";
   const sharesMap = new Map(pageData.shares.map((s) => [s.userId, s]));
 
   let sent = 0;
 
   for (const memberRaw of membersRaw ?? []) {
-    // Skip owner
-    if (memberRaw.user_id === user.id) continue;
+    // Skip the payer (they don't owe themselves)
+    if (memberRaw.user_id === payerId) continue;
 
     const profile = (memberRaw.profiles as unknown) as {
       email: string | null;

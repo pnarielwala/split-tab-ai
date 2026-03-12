@@ -27,6 +27,8 @@ export type SplitPageData = {
   members: BillMemberWithProfile[];
   ownerProfile: Profile;
   ownerPaymentMethods: PaymentMethods | null;
+  payerProfile: Profile;
+  payerPaymentMethods: PaymentMethods | null;
 };
 
 export async function getDashboardBills(): Promise<DashboardBill[]> {
@@ -174,6 +176,19 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
   };
 }
 
+function extractPaymentMethods(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  profileRaw: any
+): PaymentMethods | null {
+  if (!profileRaw) return null;
+  return {
+    venmo_handle: profileRaw.venmo_handle ?? null,
+    zelle_id: profileRaw.zelle_id ?? null,
+    cashapp_handle: profileRaw.cashapp_handle ?? null,
+    paypal_id: profileRaw.paypal_id ?? null,
+  };
+}
+
 export async function getSplitPageData(billId: string): Promise<SplitPageData | null> {
   const supabase = await createClient();
   const {
@@ -181,18 +196,30 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: bill } = await supabase
     .from('bills')
-    .select('owner_id')
+    .select('owner_id, payer_id')
     .eq('id', billId)
     .single();
   if (!bill) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const billData = bill as any;
+  const ownerId: string = billData.owner_id;
+  const payerId: string = billData.payer_id ?? ownerId;
+  const payerDiffersFromOwner = payerId !== ownerId;
+
+  const fetchPayerProfile = payerDiffersFromOwner
+    ? supabase.from('profiles').select('*').eq('id', payerId).single()
+    : Promise.resolve({ data: null });
 
   const [
     { data: lineItemsRaw },
     { data: totals },
     { data: membersRaw },
     { data: ownerProfileRaw },
+    { data: payerProfileRawMaybe },
   ] = await Promise.all([
     supabase
       .from('line_items')
@@ -201,29 +228,36 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
       .order('sort_order', { ascending: true }),
     supabase.from('bill_totals').select('*').eq('bill_id', billId).single(),
     supabase.from('bill_members').select('*, profiles(*)').eq('bill_id', billId),
-    supabase.from('profiles').select('*').eq('id', bill.owner_id).single(),
+    supabase.from('profiles').select('*').eq('id', ownerId).single(),
+    fetchPayerProfile,
   ]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const raw = ownerProfileRaw as any;
-  const ownerPaymentMethods: PaymentMethods | null = ownerProfileRaw
-    ? {
-        venmo_handle: raw.venmo_handle ?? null,
-        zelle_id: raw.zelle_id ?? null,
-        cashapp_handle: raw.cashapp_handle ?? null,
-        paypal_id: raw.paypal_id ?? null,
-      }
-    : null;
+  const ownerPaymentMethods = extractPaymentMethods(ownerProfileRaw);
+
+  const ownerProfile: Profile = (ownerProfileRaw ?? {
+    id: ownerId,
+    email: null,
+    display_name: 'Owner',
+  }) as Profile;
+
+  let payerProfile: Profile;
+  let payerPaymentMethods: PaymentMethods | null;
+
+  if (payerDiffersFromOwner && payerProfileRawMaybe) {
+    payerProfile = payerProfileRawMaybe as Profile;
+    payerPaymentMethods = extractPaymentMethods(payerProfileRawMaybe);
+  } else {
+    payerProfile = ownerProfile;
+    payerPaymentMethods = ownerPaymentMethods;
+  }
 
   return {
     lineItems: (lineItemsRaw ?? []) as LineItemWithClaims[],
     totals: totals ?? null,
     members: (membersRaw ?? []) as BillMemberWithProfile[],
-    ownerProfile: (ownerProfileRaw ?? {
-      id: bill.owner_id,
-      email: null,
-      display_name: 'Owner',
-    }) as Profile,
+    ownerProfile,
     ownerPaymentMethods,
+    payerProfile,
+    payerPaymentMethods,
   };
 }

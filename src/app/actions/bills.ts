@@ -17,7 +17,7 @@ export async function createPlaceholderBill(): Promise<{ billId: string } | { er
 
   const { data: bill, error } = await supabase
     .from('bills')
-    .insert({ owner_id: user.id, name: 'New Bill' })
+    .insert({ owner_id: user.id, payer_id: user.id, name: 'New Bill' })
     .select()
     .single();
 
@@ -93,6 +93,7 @@ export async function createBill(formData: FormData) {
     .from('bills')
     .insert({
       owner_id: user.id,
+      payer_id: user.id,
       name: parsed.data.name,
       description: parsed.data.description ?? null,
     })
@@ -291,6 +292,53 @@ export async function claimItem(itemId: string, billId: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath(`/bills/${billId}/split`);
+}
+
+// ── Update bill payer ─────────────────────────────────────────────────────────
+
+export async function updateBillPayer(
+  billId: string,
+  newPayerUserId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  // Verify current user is the owner
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('owner_id')
+    .eq('id', billId)
+    .eq('owner_id', user.id)
+    .single();
+
+  if (!bill) return { error: 'Bill not found or not authorized' };
+
+  // Verify new payer is a participant (owner or member)
+  if (newPayerUserId !== bill.owner_id) {
+    const { data: membership } = await supabase
+      .from('bill_members')
+      .select('id')
+      .eq('bill_id', billId)
+      .eq('user_id', newPayerUserId)
+      .single();
+
+    if (!membership) return { error: 'User is not a participant on this bill' };
+  }
+
+  const { error } = await supabase
+    .from('bills')
+    .update({ payer_id: newPayerUserId })
+    .eq('id', billId)
+    .eq('owner_id', user.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/bills/${billId}`);
+  return { success: true };
 }
 
 // ── Unclaim item ──────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ export interface Bill {
   created_at: string;
   updated_at: string;
   owner_id: string;
+  payer_id: string;
   name: string;
   description: string | null;
   status: BillStatus;

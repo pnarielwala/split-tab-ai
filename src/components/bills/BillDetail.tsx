@@ -21,6 +21,7 @@ import { getSplitPageData } from '@/app/actions/queries';
 import { ShareButton } from './ShareButton';
 import { ViewReceiptButton } from './ViewReceiptButton';
 import { RequestPaymentButton } from './RequestPaymentButton';
+import { ChangePayerButton } from './ChangePayerButton';
 import type { LineItemWithClaims } from '@/types/database';
 
 interface BillDetailProps {
@@ -54,6 +55,9 @@ export function BillDetail({
   const totals = data?.totals ?? null;
   const members = data?.members ?? [];
   const ownerProfile = data?.ownerProfile;
+  const payerProfile = data?.payerProfile;
+  const payerPaymentMethods = data?.payerPaymentMethods ?? null;
+  const isPayer = currentUserId === payerProfile?.id;
   const currency = totals?.currency ?? 'USD';
 
   const participantMap = useMemo(() => {
@@ -175,8 +179,7 @@ export function BillDetail({
     );
   }
 
-  const ownerName = ownerProfile?.display_name ?? 'Owner';
-  const ownerPaymentMethods = data?.ownerPaymentMethods ?? null;
+  const payerName = payerProfile?.display_name ?? 'Payer';
 
   return (
     <div className="space-y-6">
@@ -191,23 +194,50 @@ export function BillDetail({
           </Link>
         </Button>
 
-        {!isOwner && (
-          <Button
-            className="w-full"
-            variant="outline"
-            size="sm"
-            onClick={() => setYouOweOpen(true)}
-          >
-            You owe {formatCurrency(myShare.total, currency)}
-          </Button>
-        )}
-        {isOwner && (
-          <RequestPaymentButton
-            billId={billId}
-            memberCount={memberCount}
-            shareUrl={shareUrl}
-          />
-        )}
+        <div className="flex gap-2 w-full">
+          {isOwner && members.length > 0 && ownerProfile && (
+            <div className="flex-1">
+              <ChangePayerButton
+                billId={billId}
+                currentPayerId={payerProfile?.id ?? ownerProfile.id}
+                participants={[
+                  {
+                    userId: ownerProfile.id,
+                    displayName: ownerProfile.display_name,
+                  },
+                  ...members.map((m) => ({
+                    userId: m.user_id,
+                    displayName: m.profiles.display_name,
+                  })),
+                ]}
+                onSuccess={() => {
+                  queryClient.invalidateQueries({
+                    queryKey: ['split', billId],
+                  });
+                }}
+              />
+            </div>
+          )}
+          <div className="flex-auto">
+            {!isPayer && (
+              <Button
+                className="w-full"
+                variant={myShare.total > 0 ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setYouOweOpen(true)}
+              >
+                You owe {formatCurrency(myShare.total, currency)}
+              </Button>
+            )}
+            {isPayer && (
+              <RequestPaymentButton
+                billId={billId}
+                memberCount={memberCount}
+                shareUrl={shareUrl}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Item list */}
@@ -321,72 +351,98 @@ export function BillDetail({
       )}
 
       {/* You Owe Modal */}
-      {!isOwner && (
+      {!isPayer && (
         <Dialog open={youOweOpen} onOpenChange={setYouOweOpen}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>You owe {ownerName}</DialogTitle>
+              <DialogTitle>You owe {payerName}</DialogTitle>
               <DialogDescription>
                 {formatCurrency(myShare.total, currency)} for {billName}
               </DialogDescription>
             </DialogHeader>
-            {ownerPaymentMethods &&
-            (ownerPaymentMethods.venmo_handle ||
-              ownerPaymentMethods.zelle_id ||
-              ownerPaymentMethods.cashapp_handle ||
-              ownerPaymentMethods.paypal_id) ? (
+            {payerPaymentMethods &&
+            (payerPaymentMethods.venmo_handle ||
+              payerPaymentMethods.zelle_id ||
+              payerPaymentMethods.cashapp_handle ||
+              payerPaymentMethods.paypal_id) ? (
               <div className="space-y-2">
-                {ownerPaymentMethods.venmo_handle && (
-                  <a
-                    href={`https://venmo.com/${ownerPaymentMethods.venmo_handle}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
-                  >
-                    <span className="font-medium">Venmo</span>
-                    <span className="text-muted-foreground">
-                      @{ownerPaymentMethods.venmo_handle}
-                    </span>
-                  </a>
-                )}
-                {ownerPaymentMethods.cashapp_handle && (
-                  <a
-                    href={`https://cash.app/$${ownerPaymentMethods.cashapp_handle}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
-                  >
-                    <span className="font-medium">Cash App</span>
-                    <span className="text-muted-foreground">
-                      ${ownerPaymentMethods.cashapp_handle}
-                    </span>
-                  </a>
-                )}
-                {ownerPaymentMethods.zelle_id && (
+                {payerPaymentMethods.venmo_handle &&
+                  (() => {
+                    const handle = payerPaymentMethods.venmo_handle.replace(
+                      /^@/,
+                      ''
+                    );
+                    const venmoParams = new URLSearchParams({
+                      txn: 'pay',
+                      amount: myShare.total.toFixed(2),
+                      note: billName,
+                    });
+                    return (
+                      <a
+                        href={`https://venmo.com/${handle}?${venmoParams}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      >
+                        <span className="font-medium">Venmo</span>
+                        <span className="text-muted-foreground">@{handle}</span>
+                      </a>
+                    );
+                  })()}
+                {payerPaymentMethods.cashapp_handle &&
+                  (() => {
+                    const handle = payerPaymentMethods.cashapp_handle.replace(
+                      /^\$/,
+                      ''
+                    );
+                    const amount = myShare.total.toFixed(2);
+                    return (
+                      <a
+                        href={`https://cash.app/$${handle}/${amount}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      >
+                        <span className="font-medium">Cash App</span>
+                        <span className="text-muted-foreground">${handle}</span>
+                      </a>
+                    );
+                  })()}
+                {payerPaymentMethods.zelle_id && (
                   <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
                     <span className="font-medium">Zelle</span>
                     <span className="text-muted-foreground">
-                      {ownerPaymentMethods.zelle_id}
+                      {payerPaymentMethods.zelle_id}
                     </span>
                   </div>
                 )}
-                {ownerPaymentMethods.paypal_id && (
-                  <a
-                    href={`https://paypal.me/${ownerPaymentMethods.paypal_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
-                  >
-                    <span className="font-medium">PayPal</span>
-                    <span className="text-muted-foreground">
-                      {ownerPaymentMethods.paypal_id}
-                    </span>
-                  </a>
-                )}
+                {payerPaymentMethods.paypal_id &&
+                  (() => {
+                    const id = payerPaymentMethods.paypal_id!;
+                    const isEmail = id.includes('@') && !id.startsWith('@');
+                    const handle = id.replace(/^@/, '');
+                    const amount = myShare.total.toFixed(2);
+                    return isEmail ? (
+                      <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                        <span className="font-medium">PayPal</span>
+                        <span className="text-muted-foreground">{id}</span>
+                      </div>
+                    ) : (
+                      <a
+                        href={`https://paypal.me/${handle}/${amount}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors"
+                      >
+                        <span className="font-medium">PayPal</span>
+                        <span className="text-muted-foreground">{id}</span>
+                      </a>
+                    );
+                  })()}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                The bill owner hasn&apos;t added payment methods yet.
+                {payerName} hasn&apos;t added payment methods yet.
               </p>
             )}
           </DialogContent>
