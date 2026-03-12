@@ -4,7 +4,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Bill, BillTotal } from '@/types/database';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Users } from 'lucide-react';
 import { DeleteBillButton } from '@/components/bills/DeleteBillButton';
 
 const statusLabels: Record<
@@ -22,6 +22,7 @@ interface BillCardProps {
   total?: BillTotal | null;
   isOwner?: boolean;
   ownerName?: string;
+  memberCount?: number;
 }
 
 export function BillCard({
@@ -29,6 +30,7 @@ export function BillCard({
   total,
   isOwner = true,
   ownerName,
+  memberCount,
 }: BillCardProps) {
   const status = statusLabels[bill.status] ?? statusLabels.draft;
   const href =
@@ -48,7 +50,12 @@ export function BillCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="font-medium truncate">{bill.name}</p>
-              {bill.status !== 'verified' && (
+              {bill.status === 'verified' && memberCount != null ? (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                  <Users className="h-3.5 w-3.5" />
+                  {memberCount}
+                </span>
+              ) : (
                 <Badge variant={status.variant} className="shrink-0">
                   {status.label}
                 </Badge>

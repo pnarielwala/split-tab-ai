@@ -7,6 +7,7 @@ import { BillContent } from "@/components/bills/BillContent";
 import { BillDetail } from "@/components/bills/BillDetail";
 import { Badge } from "@/components/ui/badge";
 import { DeleteBillButton } from "@/components/bills/DeleteBillButton";
+import { Users } from "lucide-react";
 
 interface Props {
   params: Promise<{ billId: string }>;
@@ -36,6 +37,11 @@ export default async function BillPage({ params }: Props) {
     .single();
 
   if (!bill) notFound();
+
+  const { count: memberCount } = await supabase
+    .from("bill_members")
+    .select("id", { count: "exact", head: true })
+    .eq("bill_id", billId);
 
   const isOwner = bill.owner_id === user.id;
   const isVerified = bill.status === "verified";
@@ -74,7 +80,13 @@ export default async function BillPage({ params }: Props) {
       />
       <PageContainer>
         <div className="mb-4">
-          <h1 className="text-xl font-bold">{bill.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold">{bill.name}</h1>
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Users className="h-4 w-4" />
+              {(memberCount ?? 0) + 1}
+            </span>
+          </div>
           {bill.description && (
             <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>
           )}

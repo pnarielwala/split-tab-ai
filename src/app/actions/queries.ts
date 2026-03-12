@@ -11,7 +11,7 @@ import type {
 } from '@/types/database';
 import type { PaymentMethods } from '@/lib/notifications/types';
 
-export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string };
+export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string; member_count?: number };
 
 export type BillPageData = {
   lineItems: LineItemWithClaims[];
@@ -86,6 +86,26 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     for (const bill of billMap.values()) {
       if (bill.owner_id !== currentUserId) {
         bill.owner_display_name = profileMap.get(bill.owner_id);
+      }
+    }
+  }
+
+  const verifiedBillIds = Array.from(billMap.values())
+    .filter((b) => b.status === 'verified')
+    .map((b) => b.id);
+
+  if (verifiedBillIds.length > 0) {
+    const { data: memberRows } = await supabase
+      .from('bill_members')
+      .select('bill_id')
+      .in('bill_id', verifiedBillIds);
+    const memberCountMap = new Map<string, number>();
+    for (const row of memberRows ?? []) {
+      memberCountMap.set(row.bill_id, (memberCountMap.get(row.bill_id) ?? 0) + 1);
+    }
+    for (const bill of billMap.values()) {
+      if (bill.status === 'verified') {
+        bill.member_count = (memberCountMap.get(bill.id) ?? 0) + 1; // +1 for owner
       }
     }
   }
