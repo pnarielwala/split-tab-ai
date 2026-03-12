@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { NavThemeToggle } from '@/components/landing/NavThemeToggle';
 import { Camera, CheckSquare, Calculator, Mail, Receipt } from 'lucide-react';
 
-export function LandingPage() {
+export function LandingPage({ isLoggedIn }: { isLoggedIn?: boolean }) {
   return (
     <div className="landing min-h-screen bg-background">
       {/* Navbar */}
@@ -18,12 +18,20 @@ export function LandingPage() {
             <div className="hidden sm:block">
               <NavThemeToggle />
             </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link href="/signup">Get Started</Link>
-            </Button>
+            {isLoggedIn ? (
+              <Button size="sm" asChild>
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/login">Sign In</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href="/signup">Get Started</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>

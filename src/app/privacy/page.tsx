@@ -2,8 +2,12 @@ import Link from 'next/link';
 import { Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NavThemeToggle } from '@/components/landing/NavThemeToggle';
+import { createClient } from '@/lib/supabase/server';
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-sm">
@@ -16,12 +20,20 @@ export default function PrivacyPage() {
             <div className="hidden sm:block">
               <NavThemeToggle />
             </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link href="/signup">Get Started</Link>
-            </Button>
+            {user ? (
+              <Button size="sm" asChild>
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/login">Sign In</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link href="/signup">Get Started</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
