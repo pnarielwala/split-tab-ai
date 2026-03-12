@@ -32,6 +32,7 @@ export type SplitPageData = {
   payerProfile: Profile;
   payerPaymentMethods: PaymentMethods | null;
   paidUserIds: string[];
+  shares: ParticipantShare[];
 };
 
 export async function getDashboardBills(): Promise<DashboardBill[]> {
@@ -268,14 +269,54 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
 
   const paidUserIds = (paymentsRaw ?? []).map((p) => p.user_id);
 
+  const lineItems = (lineItemsRaw ?? []) as LineItemWithClaims[];
+  const members = (membersRaw ?? []) as BillMemberWithProfile[];
+
+  const billSubtotal = totals?.subtotal ?? 0;
+  const billTax = totals?.tax ?? 0;
+  const billGratuity = totals?.gratuity ?? 0;
+  const billFees = totals?.fees ?? 0;
+  const billDiscounts = totals?.discounts ?? 0;
+  const participantMap = new Map<string, string>();
+  participantMap.set(ownerId, ownerProfile.display_name);
+  for (const m of members) {
+    participantMap.set(m.user_id, m.profiles.display_name);
+  }
+  const subtotals = new Map<string, number>();
+  for (const item of lineItems) {
+    const count = item.bill_item_claims.length;
+    if (count === 0) continue;
+    const share = item.total_price / count;
+    for (const claim of item.bill_item_claims) {
+      subtotals.set(claim.user_id, (subtotals.get(claim.user_id) ?? 0) + share);
+    }
+  }
+  const shares: ParticipantShare[] = [];
+  for (const [userId, displayName] of participantMap.entries()) {
+    const sub = subtotals.get(userId) ?? 0;
+    if (sub === 0) continue;
+    const ratio = billSubtotal > 0 ? sub / billSubtotal : 0;
+    shares.push({
+      userId,
+      displayName,
+      subtotal: sub,
+      tax: billTax * ratio,
+      gratuity: billGratuity * ratio,
+      fees: billFees * ratio,
+      discounts: billDiscounts * ratio,
+      total: sub + billTax * ratio + billGratuity * ratio + billFees * ratio - billDiscounts * ratio,
+    });
+  }
+
   return {
-    lineItems: (lineItemsRaw ?? []) as LineItemWithClaims[],
+    lineItems,
     totals: totals ?? null,
-    members: (membersRaw ?? []) as BillMemberWithProfile[],
+    members,
     ownerProfile,
     ownerPaymentMethods,
     payerProfile,
     payerPaymentMethods,
     paidUserIds,
+    shares,
   };
 }

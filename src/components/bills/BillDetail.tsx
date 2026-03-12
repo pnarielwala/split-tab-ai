@@ -238,14 +238,16 @@ export function BillDetail({
               <RequestPaymentButton
                 billId={billId}
                 shareUrl={shareUrl}
+                currency={currency}
                 members={[
                   ...(ownerProfile && ownerProfile.id !== payerProfile?.id
-                    ? [{ userId: ownerProfile.id, displayName: ownerProfile.display_name, isPaid: paidUserIds.includes(ownerProfile.id) }]
+                    ? [{ userId: ownerProfile.id, displayName: ownerProfile.display_name, isPaid: paidUserIds.includes(ownerProfile.id), amount: data?.shares.find((s) => s.userId === ownerProfile.id)?.total }]
                     : []),
                   ...members.map((m) => ({
                     userId: m.user_id,
                     displayName: m.profiles.display_name,
                     isPaid: paidUserIds.includes(m.user_id),
+                    amount: data?.shares.find((s) => s.userId === m.user_id)?.total,
                   })),
                 ]}
                 onTogglePaid={async (userId, isPaid) => {

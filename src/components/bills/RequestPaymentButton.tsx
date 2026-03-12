@@ -13,17 +13,20 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { QRDialogContent } from './QRDialog';
+import { formatCurrency } from '@/lib/utils';
 
 interface Member {
   userId: string;
   displayName: string;
   isPaid: boolean;
+  amount?: number;
 }
 
 interface RequestPaymentButtonProps {
   billId: string;
   shareUrl: string;
   members: Member[];
+  currency?: string;
   onTogglePaid: (userId: string, isPaid: boolean) => Promise<void>;
 }
 
@@ -31,6 +34,7 @@ export function RequestPaymentButton({
   billId,
   shareUrl,
   members,
+  currency = 'USD',
   onTogglePaid,
 }: RequestPaymentButtonProps) {
   const [requestOpen, setRequestOpen] = useState(false);
@@ -177,6 +181,11 @@ export function RequestPaymentButton({
                       >
                         {member.displayName}
                       </label>
+                      {member.amount != null && (
+                        <span className="text-sm font-medium shrink-0">
+                          {formatCurrency(member.amount, currency)}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {member.isPaid ? (
