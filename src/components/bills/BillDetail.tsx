@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import { claimItem, unclaimItem, markAsPaid, markAsUnpaid } from '@/app/actions/bills';
 import { getSplitPageData } from '@/app/actions/queries';
@@ -384,6 +385,44 @@ export function BillDetail({
                 {formatCurrency(myShare.total, currency)} for {billName}
               </DialogDescription>
             </DialogHeader>
+            <Card>
+              <CardContent className="px-4 py-3 space-y-1 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Items</span>
+                  <span>{formatCurrency(myShare.subtotal, currency)}</span>
+                </div>
+                {myShare.tax > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax (prorated)</span>
+                    <span>{formatCurrency(myShare.tax, currency)}</span>
+                  </div>
+                )}
+                {myShare.gratuity > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Gratuity (prorated)</span>
+                    <span>{formatCurrency(myShare.gratuity, currency)}</span>
+                  </div>
+                )}
+                {myShare.fees > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Fees (prorated)</span>
+                    <span>{formatCurrency(myShare.fees, currency)}</span>
+                  </div>
+                )}
+                {myShare.discounts > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Discounts (prorated)</span>
+                    <span>−{formatCurrency(myShare.discounts, currency)}</span>
+                  </div>
+                )}
+                <Separator className="my-1" />
+                <div className="flex justify-between font-semibold text-foreground">
+                  <span>Your total</span>
+                  <span>{formatCurrency(myShare.total, currency)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
             {payerPaymentMethods &&
             (payerPaymentMethods.venmo_handle ||
               payerPaymentMethods.zelle_id ||
