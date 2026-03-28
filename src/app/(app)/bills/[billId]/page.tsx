@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { BackButton } from "@/components/layout/BackButton";
@@ -77,11 +78,13 @@ export default async function BillPage({ params }: Props) {
         actions={
           <>
             {showDetail && (
-              <WhatDoIDoHeaderButton
-                billId={billId}
-                currentUserId={user.id}
-                isOwner={isOwner}
-              />
+              <Suspense fallback={null}>
+                <WhatDoIDoHeaderButton
+                  billId={billId}
+                  currentUserId={user.id}
+                  isOwner={isOwner}
+                />
+              </Suspense>
             )}
             {isOwner && (
               <DeleteBillButton billId={billId} billName={bill.name} />

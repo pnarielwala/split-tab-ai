@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { HelpCircle, CheckCircle2, Circle, CircleDot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,11 @@ interface WhatDoIDoButtonProps {
   currency: string;
   hasClaimed: boolean;
   nonPayerParticipantIds: string[];
+  defaultOpen?: boolean;
+  isJoinFlow?: boolean;
+  suppressLabel?: string;
+  onSuppressJoinFlow?: () => void;
+  onClose?: () => void;
 }
 
 interface Step {
@@ -240,9 +245,20 @@ function computeScenario(props: WhatDoIDoButtonProps): ScenarioInfo {
 }
 
 export function WhatDoIDoButton(props: WhatDoIDoButtonProps) {
+  const { defaultOpen, isJoinFlow, suppressLabel, onSuppressJoinFlow, onClose } = props;
   const [open, setOpen] = useState(false);
+  const [suppress, setSuppressState] = useState(false);
   const { roleIntro, steps } = computeScenario(props);
   const currentStepIndex = steps.findIndex((s) => !s.done);
+
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
+
+  const handleDismiss = () => {
+    if (suppress && onSuppressJoinFlow) onSuppressJoinFlow();
+    setOpen(false);
+  };
 
   return (
     <>
@@ -256,7 +272,13 @@ export function WhatDoIDoButton(props: WhatDoIDoButtonProps) {
         What do I do?
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (!v) { setSuppressState(false); onClose?.(); }
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>What do I do?</DialogTitle>
@@ -301,8 +323,23 @@ export function WhatDoIDoButton(props: WhatDoIDoButtonProps) {
             })}
           </div>
 
-          <DialogFooter>
-            <Button onClick={() => setOpen(false)}>Got it!</Button>
+          <DialogFooter className="flex-col gap-3 sm:flex-col sm:gap-3 sm:space-x-0">
+            {isJoinFlow && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={suppress}
+                  onChange={(e) => setSuppressState(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="text-xs text-muted-foreground">
+                  {suppressLabel ?? 'Stop showing this when I join a bill for 90 days'}
+                </span>
+              </label>
+            )}
+            <Button onClick={handleDismiss} className="w-full">
+              Got it!
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

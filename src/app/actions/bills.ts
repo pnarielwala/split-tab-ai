@@ -228,7 +228,7 @@ export async function confirmBill(billId: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath(`/bills/${billId}`);
-  redirect(`/bills/${billId}`);
+  redirect(`/bills/${billId}?created=1`);
 }
 
 // ── Delete bill ───────────────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ export async function joinBill(billId: string) {
     if (error && error.code !== '23505') return { error: error.message };
   }
   revalidatePath(`/bills/${billId}`);
-  redirect(`/bills/${billId}`);
+  redirect(`/bills/${billId}?joined=1`);
 }
 
 // ── Claim item ────────────────────────────────────────────────────────────────
