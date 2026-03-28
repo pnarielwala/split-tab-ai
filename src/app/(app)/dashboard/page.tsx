@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { TopHeader } from '@/components/layout/TopHeader';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -15,7 +16,9 @@ export default async function DashboardPage() {
     <>
       <TopHeader title="Dashboard" />
       <PageContainer>
-        <DashboardContent currentUserId={user?.id ?? ''} />
+        <Suspense fallback={null}>
+          <DashboardContent currentUserId={user?.id ?? ''} />
+        </Suspense>
       </PageContainer>
 
       {/* FAB */}

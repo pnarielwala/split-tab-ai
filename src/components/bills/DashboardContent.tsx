@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { BillList } from '@/components/bills/BillList';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,7 +26,20 @@ async function fetchBills(): Promise<DashboardBill[]> {
 }
 
 export function DashboardContent({ currentUserId }: Props) {
-  const [filter, setFilter] = useState<Filter>('all');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const filter: Filter = rawTab === 'created' || rawTab === 'joined' ? rawTab : 'all';
+
+  function setFilter(value: Filter) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'all') {
+      params.delete('tab');
+    } else {
+      params.set('tab', value);
+    }
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }
 
   const { data: bills, isLoading } = useQuery({
     queryKey: ['bills'],

@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils";
 interface TopHeaderProps {
   title?: string;
   backHref?: string;
+  backButton?: ReactNode;
   actions?: ReactNode;
   className?: string;
 }
 
-export function TopHeader({ title, backHref, actions, className }: TopHeaderProps) {
+export function TopHeader({ title, backHref, backButton, actions, className }: TopHeaderProps) {
   return (
     <header
       className={cn(
@@ -18,7 +19,8 @@ export function TopHeader({ title, backHref, actions, className }: TopHeaderProp
         className
       )}
     >
-      {backHref && (
+      {backButton}
+      {!backButton && backHref && (
         <Link
           href={backHref}
           className="mr-2 -ml-2 flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors p-2 rounded-md"

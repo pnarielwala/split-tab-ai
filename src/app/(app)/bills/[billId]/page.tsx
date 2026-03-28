@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
+import { BackButton } from "@/components/layout/BackButton";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { BillContent } from "@/components/bills/BillContent";
 import { BillDetail } from "@/components/bills/BillDetail";
@@ -70,7 +71,7 @@ export default async function BillPage({ params }: Props) {
   return (
     <>
       <TopHeader
-        backHref="/dashboard"
+        backButton={<BackButton fallbackHref="/dashboard" />}
         title={showDetail ? (isLocked ? "Bill locked" : "Select your items") : undefined}
         actions={
           <>
