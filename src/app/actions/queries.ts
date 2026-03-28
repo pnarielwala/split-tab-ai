@@ -167,10 +167,11 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
   const billDiscounts = totals?.discounts ?? 0;
   const subtotals = new Map<string, number>();
   for (const item of lineItems) {
-    const count = item.bill_item_claims.length;
-    if (count === 0) continue;
-    const share = item.total_price / count;
+    if (item.bill_item_claims.length === 0) continue;
     for (const claim of item.bill_item_claims) {
+      const share = item.quantity > 1
+        ? (claim.quantity_claimed / item.quantity) * item.total_price
+        : item.total_price / item.bill_item_claims.length;
       subtotals.set(claim.user_id, (subtotals.get(claim.user_id) ?? 0) + share);
     }
   }
@@ -304,10 +305,11 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
   }
   const subtotals = new Map<string, number>();
   for (const item of lineItems) {
-    const count = item.bill_item_claims.length;
-    if (count === 0) continue;
-    const share = item.total_price / count;
+    if (item.bill_item_claims.length === 0) continue;
     for (const claim of item.bill_item_claims) {
+      const share = item.quantity > 1
+        ? (claim.quantity_claimed / item.quantity) * item.total_price
+        : item.total_price / item.bill_item_claims.length;
       subtotals.set(claim.user_id, (subtotals.get(claim.user_id) ?? 0) + share);
     }
   }

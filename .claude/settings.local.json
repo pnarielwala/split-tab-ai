@@ -8,7 +8,8 @@
       "Bash(cat:*)",
       "Bash(ls:*)",
       "Bash(find:*)",
-      "WebFetch(domain:resend.com)"
+      "WebFetch(domain:resend.com)",
+      "Bash(grep:*)"
     ]
   }
 }

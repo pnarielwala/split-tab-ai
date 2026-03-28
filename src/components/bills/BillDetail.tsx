@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
-import { claimItem, unclaimItem, markAsPaid, markAsUnpaid } from '@/app/actions/bills';
+import { claimItem, unclaimItem, setClaimedQuantity, markAsPaid, markAsUnpaid } from '@/app/actions/bills';
 import { getSplitPageData } from '@/app/actions/queries';
 import { ShareButton } from './ShareButton';
 import { ViewReceiptButton } from './ViewReceiptButton';
@@ -77,34 +77,64 @@ export function BillDetail({
     serverItems,
     (
       state: LineItemWithClaims[],
-      update: { itemId: string; action: 'claim' | 'unclaim' }
+      update: { itemId: string; action: 'claim' | 'unclaim' | 'set_quantity'; quantity?: number }
     ) =>
-      state.map((item) =>
-        item.id !== update.itemId
-          ? item
-          : {
-              ...item,
-              bill_item_claims:
-                update.action === 'claim'
-                  ? [
-                      ...item.bill_item_claims,
-                      {
-                        id: '',
-                        item_id: update.itemId,
-                        user_id: currentUserId,
-                        claimed_at: '',
-                        profiles: {
-                          id: currentUserId,
-                          display_name: myName,
-                          email: null,
-                        },
-                      },
-                    ]
-                  : item.bill_item_claims.filter(
-                      (c) => c.user_id !== currentUserId
-                    ),
-            }
-      )
+      state.map((item) => {
+        if (item.id !== update.itemId) return item;
+        if (update.action === 'claim') {
+          return {
+            ...item,
+            bill_item_claims: [
+              ...item.bill_item_claims,
+              {
+                id: '',
+                item_id: update.itemId,
+                user_id: currentUserId,
+                claimed_at: '',
+                quantity_claimed: 1,
+                profiles: { id: currentUserId, display_name: myName, email: null },
+              },
+            ],
+          };
+        }
+        if (update.action === 'unclaim') {
+          return {
+            ...item,
+            bill_item_claims: item.bill_item_claims.filter((c) => c.user_id !== currentUserId),
+          };
+        }
+        // set_quantity
+        const qty = update.quantity ?? 0;
+        if (qty <= 0) {
+          return {
+            ...item,
+            bill_item_claims: item.bill_item_claims.filter((c) => c.user_id !== currentUserId),
+          };
+        }
+        const existing = item.bill_item_claims.find((c) => c.user_id === currentUserId);
+        if (existing) {
+          return {
+            ...item,
+            bill_item_claims: item.bill_item_claims.map((c) =>
+              c.user_id === currentUserId ? { ...c, quantity_claimed: qty } : c
+            ),
+          };
+        }
+        return {
+          ...item,
+          bill_item_claims: [
+            ...item.bill_item_claims,
+            {
+              id: '',
+              item_id: update.itemId,
+              user_id: currentUserId,
+              claimed_at: '',
+              quantity_claimed: qty,
+              profiles: { id: currentUserId, display_name: myName, email: null },
+            },
+          ],
+        };
+      })
   );
 
   function isClaimed(item: LineItemWithClaims) {
@@ -135,12 +165,12 @@ export function BillDetail({
 
     let subtotal = 0;
     for (const item of optimisticItems) {
-      const claimed = item.bill_item_claims.some(
-        (c) => c.user_id === currentUserId
-      );
-      if (!claimed) continue;
-      const splitCount = item.bill_item_claims.length;
-      subtotal += item.total_price / splitCount;
+      const myClaim = item.bill_item_claims.find((c) => c.user_id === currentUserId);
+      if (!myClaim) continue;
+      const share = item.quantity > 1
+        ? (myClaim.quantity_claimed / item.quantity) * item.total_price
+        : item.total_price / item.bill_item_claims.length;
+      subtotal += share;
     }
 
     const ratio = billSubtotal > 0 ? subtotal / billSubtotal : 0;
@@ -272,7 +302,93 @@ export function BillDetail({
         </h2>
         <div className="space-y-0">
           {optimisticItems.map((item) => {
-            const claimed = isClaimed(item);
+            const myClaim = item.bill_item_claims.find((c) => c.user_id === currentUserId);
+            const claimed = !!myClaim;
+            const myQty = myClaim?.quantity_claimed ?? 0;
+
+            if (item.quantity > 1) {
+              const othersClaimed = item.bill_item_claims
+                .filter((c) => c.user_id !== currentUserId)
+                .reduce((sum, c) => sum + c.quantity_claimed, 0);
+              const maxClaimable = item.quantity - othersClaimed;
+              // Stepper UI for multi-unit items
+              return (
+                <div
+                  key={item.id}
+                  className="w-full border-b last:border-b-0 py-3 flex items-center gap-3"
+                >
+                  {/* Stepper */}
+                  <div className="shrink-0 flex flex-col items-center gap-1">
+                    <button
+                      onClick={() => {
+                        if (isCurrentUserPaid) return;
+                        const next = myQty + 1;
+                        startTransition(async () => {
+                          addOptimistic({ itemId: item.id, action: 'set_quantity', quantity: next });
+                          await setClaimedQuantity(item.id, billId, next);
+                          queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                          queryClient.invalidateQueries({ queryKey: ['bill', billId] });
+                        });
+                      }}
+                      disabled={isCurrentUserPaid || myQty >= maxClaimable}
+                      className="h-6 w-6 rounded-full border flex items-center justify-center text-sm font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                      aria-label="Increase"
+                    >
+                      +
+                    </button>
+                    <span className="w-5 text-center text-sm font-medium tabular-nums">{myQty}</span>
+                    <button
+                      onClick={() => {
+                        if (isCurrentUserPaid) return;
+                        const next = myQty - 1;
+                        startTransition(async () => {
+                          addOptimistic({ itemId: item.id, action: 'set_quantity', quantity: next });
+                          await setClaimedQuantity(item.id, billId, next);
+                          queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                          queryClient.invalidateQueries({ queryKey: ['bill', billId] });
+                        });
+                      }}
+                      disabled={isCurrentUserPaid || myQty <= 0}
+                      className="h-6 w-6 rounded-full border flex items-center justify-center text-sm font-medium hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                      aria-label="Decrease"
+                    >
+                      −
+                    </button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="flex items-baseline gap-1.5 min-w-0">
+                        <span className="text-sm text-muted-foreground shrink-0 w-5 text-center">
+                          {item.quantity}
+                        </span>
+                        <p className="text-sm font-medium truncate">{item.name}</p>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          × {formatCurrency(item.unit_price, currency)}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium shrink-0">
+                        {formatCurrency(item.total_price, currency)}
+                      </p>
+                    </div>
+                    {item.bill_item_claims.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {item.bill_item_claims.map((claim) => (
+                          <Badge
+                            key={claim.user_id}
+                            variant={claim.user_id === currentUserId ? 'default' : 'secondary'}
+                            className="text-xs h-5"
+                          >
+                            {participantMap.get(claim.user_id) ?? claim.profiles.display_name}: {claim.quantity_claimed}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            // quantity === 1: existing toggle behavior
             return (
               <button
                 key={item.id}
@@ -302,11 +418,6 @@ export function BillDetail({
                       <p className="text-sm font-medium truncate">
                         {item.name}
                       </p>
-                      {item.quantity > 1 && (
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          × {formatCurrency(item.unit_price, currency)}
-                        </span>
-                      )}
                     </div>
                     <p className="text-sm font-medium shrink-0">
                       {formatCurrency(item.total_price, currency)}

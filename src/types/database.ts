@@ -61,6 +61,7 @@ export interface BillItemClaim {
   item_id: string;
   user_id: string;
   claimed_at: string;
+  quantity_claimed: number;
 }
 
 export interface BillItemClaimWithProfile extends BillItemClaim {

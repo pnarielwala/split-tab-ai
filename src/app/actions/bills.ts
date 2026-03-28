@@ -412,6 +412,36 @@ export async function markAsUnpaid(
   return { success: true };
 }
 
+// ── Set claimed quantity (quantity=0 removes claim) ───────────────────────────
+
+export async function setClaimedQuantity(itemId: string, billId: string, quantity: number) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect('/login');
+
+  if (quantity <= 0) {
+    const { error } = await supabase
+      .from('bill_item_claims')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('user_id', user.id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from('bill_item_claims')
+      .upsert(
+        { item_id: itemId, user_id: user.id, quantity_claimed: quantity },
+        { onConflict: 'item_id,user_id' }
+      );
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath(`/bills/${billId}/split`);
+}
+
 // ── Unclaim item ──────────────────────────────────────────────────────────────
 
 export async function unclaimItem(itemId: string, billId: string) {
