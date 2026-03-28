@@ -8,6 +8,7 @@ import { BillContent } from "@/components/bills/BillContent";
 import { BillDetail } from "@/components/bills/BillDetail";
 import { Badge } from "@/components/ui/badge";
 import { DeleteBillButton } from "@/components/bills/DeleteBillButton";
+import { WhatDoIDoHeaderButton } from "@/components/bills/WhatDoIDoHeaderButton";
 import { Users } from "lucide-react";
 
 interface Props {
@@ -75,7 +76,13 @@ export default async function BillPage({ params }: Props) {
         title={showDetail ? (isLocked ? "Bill locked" : "Select your items") : undefined}
         actions={
           <>
-            <Badge variant={status.variant}>{status.label}</Badge>
+            {showDetail && (
+              <WhatDoIDoHeaderButton
+                billId={billId}
+                currentUserId={user.id}
+                isOwner={isOwner}
+              />
+            )}
             {isOwner && (
               <DeleteBillButton billId={billId} billName={bill.name} />
             )}
@@ -90,6 +97,7 @@ export default async function BillPage({ params }: Props) {
               <Users className="h-4 w-4" />
               {(memberCount ?? 0) + 1}
             </span>
+            <Badge variant={status.variant} className="ml-auto">{status.label}</Badge>
           </div>
           {bill.description && (
             <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>

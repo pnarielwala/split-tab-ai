@@ -304,7 +304,6 @@ export function BillDetail({
             Split summary
           </Link>
         </Button>
-
         <div className="flex gap-2 w-full">
           {isOwner && members.length > 0 && ownerProfile && (
             <div className="flex-1">
