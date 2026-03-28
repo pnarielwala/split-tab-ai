@@ -15,6 +15,7 @@ const statusLabels: Record<
   uploaded: { label: 'Processing', variant: 'secondary' },
   parsed: { label: 'Review needed', variant: 'default' },
   verified: { label: 'Done', variant: 'secondary' },
+  locked: { label: 'Done', variant: 'secondary' },
 };
 
 interface BillCardProps {
@@ -50,7 +51,7 @@ export function BillCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="font-medium truncate">{bill.name}</p>
-              {bill.status !== 'verified' && (
+              {bill.status !== 'verified' && bill.status !== 'locked' && (
                 <Badge variant={status.variant} className="shrink-0">
                   {status.label}
                 </Badge>
@@ -66,7 +67,7 @@ export function BillCard({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {bill.status === 'verified' && (
+            {(bill.status === 'verified' || bill.status === 'locked') && (
               <div className="flex flex-col items-end gap-0.5">
                 {total?.total != null && (
                   <span className="text-sm font-medium">

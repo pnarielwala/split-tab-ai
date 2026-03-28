@@ -33,6 +33,8 @@ export type SplitPageData = {
   payerPaymentMethods: PaymentMethods | null;
   paidUserIds: string[];
   shares: ParticipantShare[];
+  isLocked: boolean;
+  memberDoneStatuses: { userId: string; isDone: boolean }[];
 };
 
 export async function getDashboardBills(): Promise<DashboardBill[]> {
@@ -90,21 +92,21 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     }
   }
 
-  const verifiedBillIds = Array.from(billMap.values())
-    .filter((b) => b.status === 'verified')
+  const verifiedOrLockedBillIds = Array.from(billMap.values())
+    .filter((b) => b.status === 'verified' || b.status === 'locked')
     .map((b) => b.id);
 
-  if (verifiedBillIds.length > 0) {
+  if (verifiedOrLockedBillIds.length > 0) {
     const { data: memberRows } = await supabase
       .from('bill_members')
       .select('bill_id')
-      .in('bill_id', verifiedBillIds);
+      .in('bill_id', verifiedOrLockedBillIds);
     const memberCountMap = new Map<string, number>();
     for (const row of memberRows ?? []) {
       memberCountMap.set(row.bill_id, (memberCountMap.get(row.bill_id) ?? 0) + 1);
     }
     for (const bill of billMap.values()) {
-      if (bill.status === 'verified') {
+      if (bill.status === 'verified' || bill.status === 'locked') {
         bill.member_count = (memberCountMap.get(bill.id) ?? 0) + 1; // +1 for owner
       }
     }
@@ -234,7 +236,7 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: bill } = await supabase
     .from('bills')
-    .select('owner_id, payer_id')
+    .select('owner_id, payer_id, status')
     .eq('id', billId)
     .single();
   if (!bill) return null;
@@ -243,6 +245,7 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
   const billData = bill as any;
   const ownerId: string = billData.owner_id;
   const payerId: string = billData.payer_id ?? ownerId;
+  const isLocked: boolean = billData.status === 'locked';
   const payerDiffersFromOwner = payerId !== ownerId;
 
   const fetchPayerProfile = payerDiffersFromOwner
@@ -340,5 +343,7 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     payerPaymentMethods,
     paidUserIds,
     shares,
+    isLocked,
+    memberDoneStatuses: members.map((m) => ({ userId: m.user_id, isDone: (m as unknown as { is_done: boolean }).is_done ?? false })),
   };
 }

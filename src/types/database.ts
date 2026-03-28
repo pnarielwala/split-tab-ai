@@ -1,4 +1,4 @@
-export type BillStatus = 'draft' | 'uploaded' | 'parsed' | 'verified';
+export type BillStatus = 'draft' | 'uploaded' | 'parsed' | 'verified' | 'locked';
 
 export interface Bill {
   id: string;
@@ -50,6 +50,7 @@ export interface BillMember {
   bill_id: string;
   user_id: string;
   joined_at: string;
+  is_done: boolean;
 }
 
 export interface BillMemberWithProfile extends BillMember {

@@ -442,6 +442,135 @@ export async function setClaimedQuantity(itemId: string, billId: string, quantit
   revalidatePath(`/bills/${billId}/split`);
 }
 
+// ── Unlock bill ───────────────────────────────────────────────────────────────
+
+export async function unlockBill(
+  billId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  const { error } = await supabase
+    .from('bills')
+    .update({ status: 'verified' })
+    .eq('id', billId)
+    .eq('owner_id', user.id)
+    .eq('status', 'locked');
+
+  if (error) return { error: error.message };
+  revalidatePath(`/bills/${billId}`);
+  return { success: true };
+}
+
+// ── Mark member done ──────────────────────────────────────────────────────────
+
+export async function markMemberDone(
+  billId: string,
+  isDone: boolean
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  // Guard: bill must be verified (not locked)
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('owner_id, status')
+    .eq('id', billId)
+    .single();
+
+  if (!bill) return { error: 'Bill not found' };
+  if (bill.owner_id === user.id) return { error: 'Owner does not need to mark done' };
+  if (bill.status === 'locked') return { error: 'Bill is locked' };
+
+  const { error } = await supabase
+    .from('bill_members')
+    .update({ is_done: isDone })
+    .eq('bill_id', billId)
+    .eq('user_id', user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/bills/${billId}`);
+  return { success: true };
+}
+
+// ── Lock bill ─────────────────────────────────────────────────────────────────
+
+export async function lockBill(
+  billId: string
+): Promise<{ error: string; unclaimedItems?: { name: string; unclaimed: number }[] } | { success: true }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  // Verify owner and status
+  const { data: bill } = await supabase
+    .from('bills')
+    .select('owner_id, status')
+    .eq('id', billId)
+    .eq('owner_id', user.id)
+    .single();
+
+  if (!bill) return { error: 'Bill not found or not authorized' };
+  if (bill.status !== 'verified') return { error: 'Bill must be verified before locking' };
+
+  // Check all members are done
+  const { data: members } = await supabase
+    .from('bill_members')
+    .select('user_id, is_done')
+    .eq('bill_id', billId);
+
+  const notDone = (members ?? []).filter((m) => !m.is_done);
+  if (notDone.length > 0) return { error: 'Not all members are done claiming' };
+
+  // Check all line items are fully claimed
+  const { data: lineItems } = await supabase
+    .from('line_items')
+    .select('id, name, quantity, bill_item_claims(quantity_claimed)')
+    .eq('bill_id', billId);
+
+  const unclaimed = (lineItems ?? []).filter((item) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const claims = (item as any).bill_item_claims as { quantity_claimed: number }[] ?? [];
+    const totalClaimed = claims.reduce((sum, c) => sum + c.quantity_claimed, 0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return totalClaimed < (item as any).quantity;
+  });
+
+  if (unclaimed.length > 0) {
+    return {
+      error: 'unclaimed_items',
+      unclaimedItems: unclaimed.map((item) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const claims = (item as any).bill_item_claims as { quantity_claimed: number }[] ?? [];
+        const totalClaimed = claims.reduce((sum, c) => sum + c.quantity_claimed, 0);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return { name: item.name, unclaimed: (item as any).quantity - totalClaimed };
+      }),
+    };
+  }
+
+  const { error } = await supabase
+    .from('bills')
+    .update({ status: 'locked' })
+    .eq('id', billId)
+    .eq('owner_id', user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/bills/${billId}`);
+  return { success: true };
+}
+
 // ── Unclaim item ──────────────────────────────────────────────────────────────
 
 export async function unclaimItem(itemId: string, billId: string) {

@@ -18,6 +18,7 @@ const statusLabels: Record<string, { label: string; variant: "default" | "second
   uploaded: { label: "Processing", variant: "secondary" },
   parsed: { label: "Review needed", variant: "default" },
   verified: { label: "Verified", variant: "secondary" },
+  locked: { label: "Locked", variant: "secondary" },
 };
 
 export default async function BillPage({ params }: Props) {
@@ -45,10 +46,12 @@ export default async function BillPage({ params }: Props) {
 
   const isOwner = bill.owner_id === user.id;
   const isVerified = bill.status === "verified";
+  const isLocked = bill.status === "locked";
+  const showDetail = isVerified || isLocked;
   const status = statusLabels[bill.status] ?? statusLabels.draft;
 
-  // Non-member visiting a verified bill → redirect to join flow
-  if (isVerified && !isOwner) {
+  // Non-member visiting a verified/locked bill → redirect to join flow
+  if (showDetail && !isOwner) {
     const { data: membership } = await supabase
       .from("bill_members")
       .select("id")
@@ -68,7 +71,7 @@ export default async function BillPage({ params }: Props) {
     <>
       <TopHeader
         backHref="/dashboard"
-        title={isVerified ? "Select your items" : undefined}
+        title={showDetail ? (isLocked ? "Bill locked" : "Select your items") : undefined}
         actions={
           <>
             <Badge variant={status.variant}>{status.label}</Badge>
@@ -91,7 +94,7 @@ export default async function BillPage({ params }: Props) {
             <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>
           )}
         </div>
-        {isVerified ? (
+        {showDetail ? (
           <BillDetail
             billId={billId}
             currentUserId={user.id}
