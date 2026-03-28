@@ -813,6 +813,11 @@ export function BillDetail({
                                       ×{myQty}
                                     </span>
                                   )}
+                                  {item.quantity === 1 && item.bill_item_claims.length > 1 && (
+                                    <span className="shrink-0 text-muted-foreground">
+                                      shared
+                                    </span>
+                                  )}
                                 </div>
                                 <span className="shrink-0 text-muted-foreground">
                                   {formatCurrency(myPrice, currency)}
