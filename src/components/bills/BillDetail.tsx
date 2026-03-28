@@ -59,6 +59,7 @@ export function BillDetail({
 }: BillDetailProps) {
   const queryClient = useQueryClient();
   const [youOweOpen, setYouOweOpen] = useState(false);
+  const [doneConfirmOpen, setDoneConfirmOpen] = useState(false);
   const [isPaidPending, startPaidTransition] = useTransition();
   const [isDonePending, startDoneTransition] = useTransition();
   const [isLockPending, startLockTransition] = useTransition();
@@ -422,12 +423,18 @@ export function BillDetail({
             size="sm"
             variant={currentMemberIsDone ? 'outline' : 'default'}
             disabled={isDonePending}
-            onClick={() =>
-              startDoneTransition(async () => {
-                await markMemberDone(billId, !currentMemberIsDone);
-                queryClient.invalidateQueries({ queryKey: ['split', billId] });
-              })
-            }
+            onClick={() => {
+              if (currentMemberIsDone) {
+                startDoneTransition(async () => {
+                  await markMemberDone(billId, false);
+                  queryClient.invalidateQueries({
+                    queryKey: ['split', billId],
+                  });
+                });
+              } else {
+                setDoneConfirmOpen(true);
+              }
+            }}
           >
             {isDonePending ? '…' : currentMemberIsDone ? 'Undo' : "I'm done"}
           </Button>
@@ -744,6 +751,132 @@ export function BillDetail({
             <span>{formatCurrency(totals.total, currency)}</span>
           </div>
         </div>
+      )}
+
+      {/* Done Confirmation Modal */}
+      {!isOwner && (
+        <Dialog open={doneConfirmOpen} onOpenChange={setDoneConfirmOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Review your selections</DialogTitle>
+              <DialogDescription>
+                Make sure everything looks right before confirming.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 overflow-hidden">
+              {(() => {
+                const claimed = optimisticItems.filter((item) =>
+                  item.bill_item_claims.some((c) => c.user_id === currentUserId)
+                );
+                const unclaimed = optimisticItems.filter(
+                  (item) =>
+                    !item.bill_item_claims.some(
+                      (c) => c.user_id === currentUserId
+                    )
+                );
+                return (
+                  <>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        Your items ({claimed.reduce((sum, item) => {
+                          const qty = item.bill_item_claims.find((c) => c.user_id === currentUserId)?.quantity_claimed ?? 1;
+                          return sum + qty;
+                        }, 0)})
+                      </p>
+                      {claimed.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          None — you haven&apos;t claimed anything.
+                        </p>
+                      ) : (
+                        <div className="space-y-0">
+                          {claimed.map((item) => {
+                            const myClaim = item.bill_item_claims.find(
+                              (c) => c.user_id === currentUserId
+                            );
+                            const myQty = myClaim?.quantity_claimed ?? 1;
+                            const myPrice =
+                              item.quantity > 1
+                                ? (myQty / item.quantity) * item.total_price
+                                : item.total_price /
+                                  item.bill_item_claims.length;
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
+                              >
+                                <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
+                                  <p className="font-medium truncate">
+                                    {item.name}
+                                  </p>
+                                  {item.quantity > 1 && (
+                                    <span className="shrink-0 text-muted-foreground">
+                                      ×{myQty}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="shrink-0 text-muted-foreground">
+                                  {formatCurrency(myPrice, currency)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    {unclaimed.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Not claimed ({unclaimed.length})
+                        </p>
+                        <div className="space-y-0">
+                          {unclaimed.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm text-muted-foreground overflow-hidden"
+                            >
+                              <p className="truncate min-w-0 flex-1">
+                                {item.name}
+                              </p>
+                              <span className="shrink-0">
+                                {formatCurrency(item.total_price, currency)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setDoneConfirmOpen(false)}
+              >
+                Go back
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                disabled={isDonePending}
+                onClick={() => {
+                  setDoneConfirmOpen(false);
+                  startDoneTransition(async () => {
+                    await markMemberDone(billId, true);
+                    queryClient.invalidateQueries({
+                      queryKey: ['split', billId],
+                    });
+                  });
+                }}
+              >
+                {isDonePending ? '…' : 'Looks good'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* You Owe Modal */}
