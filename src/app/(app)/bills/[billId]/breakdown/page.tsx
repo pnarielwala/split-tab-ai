@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { TopHeader } from "@/components/layout/TopHeader";
+import { BackButton } from "@/components/layout/BackButton";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { BreakdownContent } from "@/components/bills/BreakdownContent";
 
@@ -44,7 +45,7 @@ export default async function BreakdownPage({ params }: Props) {
 
   return (
     <>
-      <TopHeader title="Split summary" backHref={`/bills/${billId}`} />
+      <TopHeader title="Split summary" backButton={<BackButton fallbackHref={`/bills/${billId}`} />} />
       <PageContainer>
         <BreakdownContent billId={billId} currentUserId={user.id} isPayer={isPayer} />
       </PageContainer>

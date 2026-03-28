@@ -14,7 +14,7 @@ export function BackButton({ fallbackHref }: BackButtonProps) {
     if (window.history.length > 1) {
       router.back();
     } else {
-      router.push(fallbackHref);
+      router.replace(fallbackHref);
     }
   }
 
