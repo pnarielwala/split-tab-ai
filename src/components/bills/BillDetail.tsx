@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { PieChart, Lock } from 'lucide-react';
+import { PieChart, Lock, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -91,6 +91,14 @@ export function BillDetail({
     : (memberDoneStatuses.find((m) => m.userId === currentUserId)?.isDone ??
       false);
   const allMembersDone = memberDoneStatuses.every((m) => m.isDone);
+
+  const nonPayerParticipantIds = [
+    ...(ownerProfile && ownerProfile.id !== payerProfile?.id ? [ownerProfile.id] : []),
+    ...members.filter((m) => m.user_id !== payerProfile?.id).map((m) => m.user_id),
+  ];
+  const allSettled =
+    nonPayerParticipantIds.length > 0 &&
+    nonPayerParticipantIds.every((id) => paidUserIds.includes(id));
 
   const participantMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -269,12 +277,16 @@ export function BillDetail({
     <div className="space-y-6">
       {/* Locked banner */}
       {isLocked && (
-        <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+        <div className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm ${allSettled ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
           <div className="flex items-center gap-2">
-            <Lock className="h-4 w-4 shrink-0" />
-            Bill is locked — no further changes
+            {allSettled ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            ) : (
+              <Lock className="h-4 w-4 shrink-0" />
+            )}
+            {allSettled ? 'All settled up!' : 'Bill is locked — no further changes'}
           </div>
-          {isOwner && (
+          {isOwner && !allSettled && (
             <Button
               variant="ghost"
               size="sm"
@@ -358,7 +370,7 @@ export function BillDetail({
                 {`You owe ${formatCurrency(myShare.total, currency)}`}
               </Button>
             )}
-            {isPayer && isLocked && (
+            {isPayer && isLocked && !allSettled && (
               <RequestPaymentButton
                 billId={billId}
                 billName={billName}
