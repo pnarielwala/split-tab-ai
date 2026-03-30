@@ -26,7 +26,7 @@ export default async function BreakdownPage({ params }: Props) {
     .single();
 
   if (!bill) notFound();
-  if (bill.status !== "verified") redirect(`/bills/${billId}`);
+  if (bill.status !== "verified" && bill.status !== "locked") redirect(`/bills/${billId}`);
 
   const isOwner = bill.owner_id === user.id;
   if (!isOwner) {
