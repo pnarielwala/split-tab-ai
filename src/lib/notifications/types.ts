@@ -13,6 +13,7 @@ export interface ReminderPayload {
   recipientContact: string; // email address or E.164 phone
   ownerName: string;
   billName: string;
+  billId: string;
   amount: number;
   paymentMethods: PaymentMethods;
 }

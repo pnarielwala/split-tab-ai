@@ -56,6 +56,11 @@ export async function sendEmail(payload: ReminderPayload): Promise<boolean> {
     payload.billName
   );
 
+  const APP_URL =
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`) ||
+    (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
+    'http://localhost:3000';
+
   const html = `
 <!DOCTYPE html>
 <html>
@@ -70,6 +75,10 @@ export async function sendEmail(payload: ReminderPayload): Promise<boolean> {
   <div style="margin:16px 0;">
     ${paymentLinksHtml}
   </div>
+  <a href="${APP_URL}/bills/${payload.billId}?action=mark-paid"
+     style="display:inline-block;margin-top:16px;padding:10px 20px;background:#18181b;color:#fff;border-radius:8px;text-decoration:none;font-size:14px;">
+    Mark yourself as paid →
+  </a>
   <p style="font-size:12px;color:#888;margin-top:32px;">
     Sent via SplitTab
   </p>

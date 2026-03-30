@@ -6,6 +6,7 @@ import {
   startTransition,
   useState,
   useTransition,
+  Suspense,
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -37,6 +38,7 @@ import { ShareButton } from './ShareButton';
 import { ViewReceiptButton } from './ViewReceiptButton';
 import { RequestPaymentButton } from './RequestPaymentButton';
 import { ChangePayerButton } from './ChangePayerButton';
+import { MarkAsPaidModal } from './MarkAsPaidModal';
 import type { LineItemWithClaims } from '@/types/database';
 
 interface BillDetailProps {
@@ -882,6 +884,21 @@ export function BillDetail({
             </div>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Mark As Paid Modal — triggered by ?action=mark-paid from email link */}
+      {!isPayer && (
+        <Suspense fallback={null}>
+          <MarkAsPaidModal
+            billId={billId}
+            billName={billName}
+            payerName={payerName}
+            currentUserIsPaid={isCurrentUserPaid}
+            onPaid={() => {
+              queryClient.invalidateQueries({ queryKey: ['split', billId] });
+            }}
+          />
+        </Suspense>
       )}
 
       {/* You Owe Modal */}

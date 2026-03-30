@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const billData = bill as any;
   const payerId: string = billData.payer_id ?? billData.owner_id;
+  const ownerId: string = billData.owner_id;
 
   if (payerId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -113,11 +114,44 @@ export async function POST(request: NextRequest) {
       recipientContact: email,
       ownerName,
       billName: bill.name,
+      billId,
       amount: share.total,
       paymentMethods: methods,
     });
 
     if (ok) sent++;
+  }
+
+  // If the owner is not the payer, they also owe money — send them a reminder too.
+  // The owner is not in bill_members, so they're not covered by the loop above.
+  if (ownerId !== payerId) {
+    const ownerIsRequested = !userIds || userIds.length === 0 || userIds.includes(ownerId);
+    if (ownerIsRequested) {
+      const ownerShare = sharesMap.get(ownerId);
+      if (ownerShare && ownerShare.total > 0) {
+        const { data: ownerProfileRaw } = await supabase
+          .from("profiles")
+          .select("email, display_name")
+          .eq("id", ownerId)
+          .single();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ownerProf = ownerProfileRaw as any;
+        const ownerEmail: string | null = ownerProf?.email ?? null;
+        if (ownerEmail) {
+          const ok = await sendReminder({
+            channel: "email",
+            recipientName: ownerProf?.display_name ?? "there",
+            recipientContact: ownerEmail,
+            ownerName,
+            billName: bill.name,
+            billId,
+            amount: ownerShare.total,
+            paymentMethods: methods,
+          });
+          if (ok) sent++;
+        }
+      }
+    }
   }
 
   return NextResponse.json({ sent });
