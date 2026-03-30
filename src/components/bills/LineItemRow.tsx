@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Trash2, Check, X, Merge } from "lucide-react";
-import { toast } from "sonner";
-import { updateLineItem, deleteLineItem } from "@/app/actions/bills";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useState } from 'react';
+import { Trash2, Check, X, Merge } from 'lucide-react';
+import { toast } from 'sonner';
+import { updateLineItem, deleteLineItem } from '@/app/actions/bills';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -13,9 +13,9 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog";
-import { formatCurrency } from "@/lib/utils";
-import type { LineItem } from "@/types/database";
+} from '@/components/ui/dialog';
+import { formatCurrency } from '@/lib/utils';
+import type { LineItem } from '@/types/database';
 
 interface LineItemRowProps {
   item: LineItem;
@@ -30,7 +30,7 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
-  const [mergeName, setMergeName] = useState("");
+  const [mergeName, setMergeName] = useState('');
   const [merging, setMerging] = useState(false);
 
   async function handleSave() {
@@ -46,7 +46,7 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
       });
       setEditing(false);
     } catch (err) {
-      toast.error("Failed to save item");
+      toast.error('Failed to save item');
     } finally {
       setSaving(false);
     }
@@ -70,7 +70,7 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
       });
       setMergeOpen(false);
     } catch {
-      toast.error("Failed to merge item");
+      toast.error('Failed to merge item');
     } finally {
       setMerging(false);
     }
@@ -81,7 +81,7 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
     try {
       await deleteLineItem(item.id, billId);
     } catch {
-      toast.error("Failed to delete item");
+      toast.error('Failed to delete item');
       setDeleting(false);
     }
   }
@@ -102,7 +102,7 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
               onChange={(e) => setQty(e.target.value)}
               placeholder="Qty"
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               className="h-7 text-xs w-16"
             />
@@ -154,7 +154,9 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
           </p>
         </div>
         <div className="flex flex-col items-end shrink-0">
-          <p className="text-sm font-medium">{formatCurrency(item.total_price)}</p>
+          <p className="text-sm font-medium">
+            {formatCurrency(item.total_price)}
+          </p>
           {item.quantity > 1 && (
             <Button
               variant="ghost"
@@ -190,19 +192,21 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
           <DialogHeader>
             <DialogTitle>Merge quantities</DialogTitle>
             <DialogDescription>
-              Combine {item.quantity} portions into 1 shared item to split evenly.
+              Combine {item.quantity} portions into 1 shared item to split
+              evenly.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="text-sm text-muted-foreground space-y-1">
               <p>
-                <span className="font-medium">Current:</span>{" "}
-                {item.quantity} × {item.name} @ {formatCurrency(item.unit_price)} ={" "}
+                <span className="font-medium">Current:</span> {item.quantity} ×{' '}
+                {item.name} @ {formatCurrency(item.unit_price)} ={' '}
                 {formatCurrency(item.total_price)}
               </p>
               <p>
-                <span className="font-medium">Merged:</span>{" "}
-                1 × {mergeName || `${item.quantity}x ${item.name}`} @ {formatCurrency(item.total_price)} ={" "}
+                <span className="font-medium">Merged:</span> 1 ×{' '}
+                {mergeName || `${item.quantity}x ${item.name}`} @{' '}
+                {formatCurrency(item.total_price)} ={' '}
                 {formatCurrency(item.total_price)}
               </p>
             </div>
@@ -213,13 +217,21 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
               className="text-sm"
             />
           </div>
+          <p className="sm:hidden text-xs text-center text-amber-600 dark:text-amber-400 w-full mb-1">
+            This cannot be undone.
+          </p>
           <DialogFooter>
-            <p className="text-xs text-amber-600 dark:text-amber-400 w-full mb-1">This cannot be undone.</p>
+            <p className="hidden sm:block text-xs self-center text-amber-600 dark:text-amber-400 w-full mb-1">
+              This cannot be undone.
+            </p>
             <Button variant="outline" onClick={() => setMergeOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleMerge} disabled={merging || !mergeName.trim()}>
-              {merging ? "Merging…" : "Merge"}
+            <Button
+              onClick={handleMerge}
+              disabled={merging || !mergeName.trim()}
+            >
+              {merging ? 'Merging…' : 'Merge'}
             </Button>
           </DialogFooter>
         </DialogContent>
