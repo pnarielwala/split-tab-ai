@@ -11,7 +11,9 @@ export function BackButton({ fallbackHref }: BackButtonProps) {
   const router = useRouter();
 
   function handleBack() {
-    if (window.history.length > 1) {
+    const referrer = document.referrer;
+    const cameFromApp = referrer && new URL(referrer).origin === window.location.origin;
+    if (cameFromApp) {
       router.back();
     } else {
       router.replace(fallbackHref);
