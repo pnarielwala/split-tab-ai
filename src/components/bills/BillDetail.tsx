@@ -21,7 +21,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import {
   claimItem,
@@ -376,13 +375,15 @@ export function BillDetail({
                         },
                       ]
                     : []),
-                  ...members.map((m) => ({
-                    userId: m.user_id,
-                    displayName: m.profiles.display_name,
-                    isPaid: paidUserIds.includes(m.user_id),
-                    amount: data?.shares.find((s) => s.userId === m.user_id)
-                      ?.total,
-                  })),
+                  ...members
+                    .filter((m) => m.user_id !== payerProfile?.id)
+                    .map((m) => ({
+                      userId: m.user_id,
+                      displayName: m.profiles.display_name,
+                      isPaid: paidUserIds.includes(m.user_id),
+                      amount: data?.shares.find((s) => s.userId === m.user_id)
+                        ?.total,
+                    })),
                 ]}
                 onTogglePaid={async (userId, isPaid) => {
                   if (isPaid) {
@@ -893,43 +894,86 @@ export function BillDetail({
                 {formatCurrency(myShare.total, currency)} for {billName}
               </DialogDescription>
             </DialogHeader>
-            <Card>
-              <CardContent className="px-4 py-3 space-y-1 text-sm">
+            {(() => {
+              const claimed = optimisticItems.filter((item) =>
+                item.bill_item_claims.some((c) => c.user_id === currentUserId)
+              );
+              return (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Your items ({claimed.reduce((sum, item) => {
+                      const qty = item.bill_item_claims.find((c) => c.user_id === currentUserId)?.quantity_claimed ?? 1;
+                      return sum + qty;
+                    }, 0)})
+                  </p>
+                  {claimed.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      None — you haven&apos;t claimed anything.
+                    </p>
+                  ) : (
+                    <div className="space-y-0">
+                      {claimed.map((item) => {
+                        const myClaim = item.bill_item_claims.find((c) => c.user_id === currentUserId);
+                        const myQty = myClaim?.quantity_claimed ?? 1;
+                        const myPrice =
+                          item.quantity > 1
+                            ? (myQty / item.quantity) * item.total_price
+                            : item.total_price / item.bill_item_claims.length;
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
+                          >
+                            <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
+                              <p className="font-medium truncate">{item.name}</p>
+                              {item.quantity > 1 && (
+                                <span className="shrink-0 text-muted-foreground">×{myQty}</span>
+                              )}
+                              {item.quantity === 1 && item.bill_item_claims.length > 1 && (
+                                <span className="shrink-0 text-muted-foreground">shared</span>
+                              )}
+                            </div>
+                            <span className="shrink-0 text-muted-foreground">
+                              {formatCurrency(myPrice, currency)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+            <div className="space-y-1 text-sm pt-2 border-t">
+              {myShare.tax > 0 && (
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Items</span>
-                  <span>{formatCurrency(myShare.subtotal, currency)}</span>
+                  <span>Tax (prorated)</span>
+                  <span>{formatCurrency(myShare.tax, currency)}</span>
                 </div>
-                {myShare.tax > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Tax (prorated)</span>
-                    <span>{formatCurrency(myShare.tax, currency)}</span>
-                  </div>
-                )}
-                {myShare.gratuity > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Gratuity (prorated)</span>
-                    <span>{formatCurrency(myShare.gratuity, currency)}</span>
-                  </div>
-                )}
-                {myShare.fees > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Fees (prorated)</span>
-                    <span>{formatCurrency(myShare.fees, currency)}</span>
-                  </div>
-                )}
-                {myShare.discounts > 0 && (
-                  <div className="flex justify-between text-muted-foreground">
-                    <span>Discounts (prorated)</span>
-                    <span>−{formatCurrency(myShare.discounts, currency)}</span>
-                  </div>
-                )}
-                <Separator className="my-1" />
-                <div className="flex justify-between font-semibold text-foreground">
-                  <span>Your total</span>
-                  <span>{formatCurrency(myShare.total, currency)}</span>
+              )}
+              {myShare.gratuity > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Gratuity (prorated)</span>
+                  <span>{formatCurrency(myShare.gratuity, currency)}</span>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+              {myShare.fees > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Fees (prorated)</span>
+                  <span>{formatCurrency(myShare.fees, currency)}</span>
+                </div>
+              )}
+              {myShare.discounts > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Discounts (prorated)</span>
+                  <span>−{formatCurrency(myShare.discounts, currency)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-semibold text-foreground pt-1">
+                <span>Your total</span>
+                <span>{formatCurrency(myShare.total, currency)}</span>
+              </div>
+            </div>
 
             {!isLocked && (
               <p className="text-sm text-muted-foreground flex flex-col gap-2">
@@ -949,6 +993,9 @@ export function BillDetail({
                 payerPaymentMethods.cashapp_handle ||
                 payerPaymentMethods.paypal_id) ? (
                 <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Pay {payerName}
+                  </p>
                   {payerPaymentMethods.venmo_handle &&
                     (() => {
                       const handle = payerPaymentMethods.venmo_handle.replace(
@@ -1033,7 +1080,7 @@ export function BillDetail({
                 </p>
               ))}
             {isLocked && (
-              <div className="mt-4 pt-3 border-t flex items-center justify-between">
+              <div className="flex items-center justify-between">
                 {isCurrentUserPaid ? (
                   <>
                     <span className="text-sm text-green-600 font-medium">
