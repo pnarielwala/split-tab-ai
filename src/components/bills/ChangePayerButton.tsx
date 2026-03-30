@@ -25,6 +25,7 @@ interface ChangePayerButtonProps {
   currentPayerId: string;
   participants: Participant[];
   onSuccess?: () => void;
+  disabled?: boolean;
 }
 
 export function ChangePayerButton({
@@ -32,6 +33,7 @@ export function ChangePayerButton({
   currentPayerId,
   participants,
   onSuccess,
+  disabled,
 }: ChangePayerButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -74,43 +76,52 @@ export function ChangePayerButton({
           <DialogHeader>
             <DialogTitle>Who paid?</DialogTitle>
             <DialogDescription>
-              Select the person who paid for this bill. Everyone else will owe
-              them.
+              {disabled
+                ? 'The payer cannot be changed once someone has marked themselves as paid.'
+                : 'Select the person who paid for this bill. Everyone else will owe them.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-1">
-            {participants.map((p) => (
-              <button
-                key={p.userId}
-                onClick={() => setSelected(p.userId)}
-                className={`w-full text-left rounded-md border px-3 py-2.5 text-sm transition-colors ${
-                  selected === p.userId
-                    ? 'border-primary bg-primary/5 font-medium'
-                    : 'hover:bg-muted'
-                }`}
-              >
-                {p.displayName}
-                {p.userId === currentPayerId && (
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    (current)
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+          {!disabled && (
+            <div className="space-y-1">
+              {participants.map((p) => (
+                <button
+                  key={p.userId}
+                  onClick={() => setSelected(p.userId)}
+                  className={`w-full text-left rounded-md border px-3 py-2.5 text-sm transition-colors ${
+                    selected === p.userId
+                      ? 'border-primary bg-primary/5 font-medium'
+                      : 'hover:bg-muted'
+                  }`}
+                >
+                  {p.displayName}
+                  {p.userId === currentPayerId && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      (current)
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleConfirm} disabled={loading}>
-              {loading ? 'Saving…' : 'Confirm'}
-            </Button>
+            {disabled ? (
+              <Button onClick={() => setOpen(false)}>Got it</Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen(false)}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleConfirm} disabled={loading}>
+                  {loading ? 'Saving…' : 'Confirm'}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

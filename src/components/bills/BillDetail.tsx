@@ -323,6 +323,7 @@ export function BillDetail({
               <ChangePayerButton
                 billId={billId}
                 currentPayerId={payerProfile?.id ?? ownerProfile.id}
+                disabled={paidUserIds.length > 0}
                 participants={[
                   {
                     userId: ownerProfile.id,
