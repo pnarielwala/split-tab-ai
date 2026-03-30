@@ -34,6 +34,10 @@ export function DeleteBillButton({
 
   function handleDelete() {
     startTransition(async () => {
+      queryClient.setQueryData<unknown[]>(['bills'], (old) =>
+        old ? old.filter((b: any) => b.id !== billId) : old
+      );
+      setOpen(false);
       await deleteBill(billId);
       queryClient.invalidateQueries({ queryKey: ['bills'] });
     });
