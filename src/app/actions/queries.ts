@@ -11,7 +11,7 @@ import type {
 } from '@/types/database';
 import type { PaymentMethods } from '@/lib/notifications/types';
 
-export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string; member_count?: number };
+export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string; member_count?: number; is_archived: boolean };
 
 export type BillPageData = {
   lineItems: LineItemWithClaims[];
@@ -61,7 +61,7 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     const totals = Array.isArray(bill.bill_totals)
       ? (bill.bill_totals[0] ?? null)
       : bill.bill_totals;
-    billMap.set(bill.id, { ...bill, bill_totals: totals });
+    billMap.set(bill.id, { ...bill, bill_totals: totals, is_archived: false });
   }
 
   for (const m of memberships ?? []) {
@@ -72,7 +72,7 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     const totals = Array.isArray(bill.bill_totals)
       ? (bill.bill_totals[0] ?? null)
       : bill.bill_totals;
-    billMap.set(bill.id, { ...bill, bill_totals: totals });
+    billMap.set(bill.id, { ...bill, bill_totals: totals, is_archived: false });
   }
 
   const joinedOwnerIds = Array.from(billMap.values())
@@ -109,6 +109,19 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
       if (bill.status === 'verified' || bill.status === 'locked') {
         bill.member_count = (memberCountMap.get(bill.id) ?? 0) + 1; // +1 for owner
       }
+    }
+  }
+
+  // Fetch archive state for current user (RLS filters to auth.uid() automatically)
+  const allBillIds = Array.from(billMap.keys());
+  if (allBillIds.length > 0) {
+    const { data: archiveRows } = await supabase
+      .from('bill_archives')
+      .select('bill_id')
+      .in('bill_id', allBillIds);
+    const archivedSet = new Set((archiveRows ?? []).map((r) => r.bill_id));
+    for (const bill of billMap.values()) {
+      bill.is_archived = archivedSet.has(bill.id);
     }
   }
 

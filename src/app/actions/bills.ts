@@ -571,6 +571,38 @@ export async function lockBill(
   return { success: true };
 }
 
+// ── Archive / unarchive bill ──────────────────────────────────────────────────
+
+export async function archiveBill(billId: string): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Unauthorized' };
+
+  const { error } = await supabase
+    .from('bill_archives')
+    .insert({ bill_id: billId, user_id: user.id });
+
+  if (error && error.code !== '23505') return { error: error.message };
+  revalidatePath('/dashboard');
+  return { success: true };
+}
+
+export async function unarchiveBill(billId: string): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Unauthorized' };
+
+  const { error } = await supabase
+    .from('bill_archives')
+    .delete()
+    .eq('bill_id', billId)
+    .eq('user_id', user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath('/dashboard');
+  return { success: true };
+}
+
 // ── Unclaim item ──────────────────────────────────────────────────────────────
 
 export async function unclaimItem(itemId: string, billId: string) {

@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import type { Bill, BillTotal } from '@/types/database';
 import { ChevronRight, Users } from 'lucide-react';
 import { DeleteBillButton } from '@/components/bills/DeleteBillButton';
+import { ArchiveBillButton } from '@/components/bills/ArchiveBillButton';
 
 const statusLabels: Record<
   string,
@@ -22,6 +23,7 @@ interface BillCardProps {
   bill: Bill;
   total?: BillTotal | null;
   isOwner?: boolean;
+  isArchived?: boolean;
   ownerName?: string;
   memberCount?: number;
 }
@@ -30,6 +32,7 @@ export function BillCard({
   bill,
   total,
   isOwner = true,
+  isArchived,
   ownerName,
   memberCount,
 }: BillCardProps) {
@@ -85,11 +88,10 @@ export function BillCard({
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </div>
         </Link>
-        {isOwner && (
-          <div className="pr-2 shrink-0">
-            <DeleteBillButton billId={bill.id} billName={bill.name} />
-          </div>
-        )}
+        <div className="pr-2 shrink-0 flex items-center">
+          <ArchiveBillButton billId={bill.id} isArchived={isArchived ?? false} />
+          {isOwner && <DeleteBillButton billId={bill.id} billName={bill.name} />}
+        </div>
       </CardContent>
     </Card>
   );

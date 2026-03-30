@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { BillList } from '@/components/bills/BillList';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -26,6 +28,7 @@ async function fetchBills(): Promise<DashboardBill[]> {
 }
 
 export function DashboardContent({ currentUserId }: Props) {
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawTab = searchParams.get('tab');
@@ -62,6 +65,9 @@ export function DashboardContent({ currentUserId }: Props) {
     return true;
   });
 
+  const activeBills = filtered.filter((b) => !b.is_archived);
+  const archivedBills = filtered.filter((b) => b.is_archived);
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -80,7 +86,24 @@ export function DashboardContent({ currentUserId }: Props) {
           </button>
         ))}
       </div>
-      <BillList bills={filtered} currentUserId={currentUserId} />
+      <BillList bills={activeBills} currentUserId={currentUserId} />
+      {archivedBills.length > 0 && (
+        <div className="mt-2">
+          <button
+            onClick={() => setArchivedOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-1 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            aria-expanded={archivedOpen}
+          >
+            <span>Archived ({archivedBills.length})</span>
+            {archivedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {archivedOpen && (
+            <div className="mt-2 opacity-60">
+              <BillList bills={archivedBills} currentUserId={currentUserId} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
