@@ -116,7 +116,7 @@ export default async function BillPage({ params }: Props) {
             billName={bill.name}
           />
         ) : (
-          <BillContent billId={billId} />
+          <BillContent billId={billId} isOwner={isOwner} />
         )}
       </PageContainer>
     </>

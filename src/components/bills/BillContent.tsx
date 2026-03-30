@@ -7,9 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   billId: string;
+  isOwner?: boolean;
 }
 
-export function BillContent({ billId }: Props) {
+export function BillContent({ billId, isOwner }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ['bill', billId],
     queryFn: () => getBillPageData(billId),
@@ -27,5 +28,5 @@ export function BillContent({ billId }: Props) {
 
   if (!data) return null;
 
-  return <BillSummary lineItems={data.lineItems} totals={data.totals ?? null} />;
+  return <BillSummary lineItems={data.lineItems} totals={data.totals ?? null} billId={billId} isOwner={isOwner} />;
 }

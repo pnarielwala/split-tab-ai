@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { PieChart, Lock, CheckCircle2 } from 'lucide-react';
+import { PieChart, Lock, CheckCircle2, Merge } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -21,7 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/utils';
 import {
   claimItem,
@@ -32,6 +35,7 @@ import {
   markMemberDone,
   lockBill,
   unlockBill,
+  updateLineItem,
 } from '@/app/actions/bills';
 import { getSplitPageData } from '@/app/actions/queries';
 import { ShareButton } from './ShareButton';
@@ -68,6 +72,9 @@ export function BillDetail({
   const [lockError, setLockError] = useState<
     { name: string; unclaimed: number }[] | null
   >(null);
+  const [mergeItem, setMergeItem] = useState<LineItemWithClaims | null>(null);
+  const [mergeName, setMergeName] = useState('');
+  const [merging, setMerging] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['split', billId],
@@ -93,8 +100,12 @@ export function BillDetail({
   const allMembersDone = memberDoneStatuses.every((m) => m.isDone);
 
   const nonPayerParticipantIds = [
-    ...(ownerProfile && ownerProfile.id !== payerProfile?.id ? [ownerProfile.id] : []),
-    ...members.filter((m) => m.user_id !== payerProfile?.id).map((m) => m.user_id),
+    ...(ownerProfile && ownerProfile.id !== payerProfile?.id
+      ? [ownerProfile.id]
+      : []),
+    ...members
+      .filter((m) => m.user_id !== payerProfile?.id)
+      .map((m) => m.user_id),
   ];
   const allSettled =
     nonPayerParticipantIds.length > 0 &&
@@ -212,6 +223,25 @@ export function BillDetail({
     });
   }
 
+  async function handleMerge() {
+    if (!mergeItem) return;
+    setMerging(true);
+    try {
+      await updateLineItem(mergeItem.id, billId, {
+        name: mergeName,
+        quantity: 1,
+        unit_price: mergeItem.total_price,
+        total_price: mergeItem.total_price,
+      });
+      queryClient.invalidateQueries({ queryKey: ['split', billId] });
+      setMergeItem(null);
+    } catch {
+      toast.error('Failed to merge item');
+    } finally {
+      setMerging(false);
+    }
+  }
+
   const myShare = useMemo(() => {
     const billSubtotal = totals?.subtotal ?? 0;
     const billTax = totals?.tax ?? 0;
@@ -277,14 +307,18 @@ export function BillDetail({
     <div className="space-y-6">
       {/* Locked banner */}
       {isLocked && (
-        <div className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm ${allSettled ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}>
+        <div
+          className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm ${allSettled ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}
+        >
           <div className="flex items-center gap-2">
             {allSettled ? (
               <CheckCircle2 className="h-4 w-4 shrink-0" />
             ) : (
               <Lock className="h-4 w-4 shrink-0" />
             )}
-            {allSettled ? 'All settled up!' : 'Bill is locked — no further changes'}
+            {allSettled
+              ? 'All settled up!'
+              : 'Bill is locked — no further changes'}
           </div>
           {isOwner && !allSettled && (
             <Button
@@ -643,23 +677,40 @@ export function BillDetail({
                         {formatCurrency(item.total_price, currency)}
                       </p>
                     </div>
-                    {item.bill_item_claims.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {item.bill_item_claims.map((claim) => (
-                          <Badge
-                            key={claim.user_id}
-                            variant={
-                              claim.user_id === currentUserId
-                                ? 'default'
-                                : 'secondary'
-                            }
-                            className={`text-xs h-5${readOnly ? ' pointer-events-none' : ''}`}
+                    {(item.bill_item_claims.length > 0 ||
+                      (isOwner && !isLocked)) && (
+                      <div className="flex items-center justify-between mt-1.5">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {item.bill_item_claims.map((claim) => (
+                            <Badge
+                              key={claim.user_id}
+                              variant={
+                                claim.user_id === currentUserId
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                              className={`text-xs h-5${readOnly ? ' pointer-events-none' : ''}`}
+                            >
+                              {participantMap.get(claim.user_id) ??
+                                claim.profiles.display_name}
+                              : {claim.quantity_claimed}
+                            </Badge>
+                          ))}
+                        </div>
+                        {isOwner && !isLocked && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 text-muted-foreground"
+                            title="Merge quantities into one item"
+                            onClick={() => {
+                              setMergeName(`${item.quantity}x ${item.name}`);
+                              setMergeItem(item);
+                            }}
                           >
-                            {participantMap.get(claim.user_id) ??
-                              claim.profiles.display_name}
-                            : {claim.quantity_claimed}
-                          </Badge>
-                        ))}
+                            <Merge className="h-3 w-3" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -793,10 +844,15 @@ export function BillDetail({
                   <>
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                        Your items ({claimed.reduce((sum, item) => {
-                          const qty = item.bill_item_claims.find((c) => c.user_id === currentUserId)?.quantity_claimed ?? 1;
+                        Your items (
+                        {claimed.reduce((sum, item) => {
+                          const qty =
+                            item.bill_item_claims.find(
+                              (c) => c.user_id === currentUserId
+                            )?.quantity_claimed ?? 1;
                           return sum + qty;
-                        }, 0)})
+                        }, 0)}
+                        )
                       </p>
                       {claimed.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
@@ -828,11 +884,12 @@ export function BillDetail({
                                       ×{myQty}
                                     </span>
                                   )}
-                                  {item.quantity === 1 && item.bill_item_claims.length > 1 && (
-                                    <span className="shrink-0 text-muted-foreground">
-                                      shared
-                                    </span>
-                                  )}
+                                  {item.quantity === 1 &&
+                                    item.bill_item_claims.length > 1 && (
+                                      <span className="shrink-0 text-muted-foreground">
+                                        shared
+                                      </span>
+                                    )}
                                 </div>
                                 <span className="shrink-0 text-muted-foreground">
                                   {formatCurrency(myPrice, currency)}
@@ -931,10 +988,15 @@ export function BillDetail({
               return (
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Your items ({claimed.reduce((sum, item) => {
-                      const qty = item.bill_item_claims.find((c) => c.user_id === currentUserId)?.quantity_claimed ?? 1;
+                    Your items (
+                    {claimed.reduce((sum, item) => {
+                      const qty =
+                        item.bill_item_claims.find(
+                          (c) => c.user_id === currentUserId
+                        )?.quantity_claimed ?? 1;
                       return sum + qty;
-                    }, 0)})
+                    }, 0)}
+                    )
                   </p>
                   {claimed.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -943,7 +1005,9 @@ export function BillDetail({
                   ) : (
                     <div className="space-y-0">
                       {claimed.map((item) => {
-                        const myClaim = item.bill_item_claims.find((c) => c.user_id === currentUserId);
+                        const myClaim = item.bill_item_claims.find(
+                          (c) => c.user_id === currentUserId
+                        );
                         const myQty = myClaim?.quantity_claimed ?? 1;
                         const myPrice =
                           item.quantity > 1
@@ -955,13 +1019,20 @@ export function BillDetail({
                             className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
                           >
                             <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
-                              <p className="font-medium truncate">{item.name}</p>
+                              <p className="font-medium truncate">
+                                {item.name}
+                              </p>
                               {item.quantity > 1 && (
-                                <span className="shrink-0 text-muted-foreground">×{myQty}</span>
+                                <span className="shrink-0 text-muted-foreground">
+                                  ×{myQty}
+                                </span>
                               )}
-                              {item.quantity === 1 && item.bill_item_claims.length > 1 && (
-                                <span className="shrink-0 text-muted-foreground">shared</span>
-                              )}
+                              {item.quantity === 1 &&
+                                item.bill_item_claims.length > 1 && (
+                                  <span className="shrink-0 text-muted-foreground">
+                                    shared
+                                  </span>
+                                )}
                             </div>
                             <span className="shrink-0 text-muted-foreground">
                               {formatCurrency(myPrice, currency)}
@@ -1155,6 +1226,64 @@ export function BillDetail({
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog
+        open={!!mergeItem}
+        onOpenChange={(open) => {
+          if (!open) setMergeItem(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge quantities</DialogTitle>
+            <DialogDescription>
+              Combine {mergeItem?.quantity} portions into 1 shared item to split
+              evenly.
+            </DialogDescription>
+          </DialogHeader>
+          {mergeItem && (
+            <div className="space-y-3 py-2">
+              <div className="text-sm text-muted-foreground space-y-1">
+                <p>
+                  <span className="font-medium">Current:</span>{' '}
+                  {mergeItem.quantity} × {mergeItem.name} @{' '}
+                  {formatCurrency(mergeItem.unit_price, currency)} ={' '}
+                  {formatCurrency(mergeItem.total_price, currency)}
+                </p>
+                <p>
+                  <span className="font-medium">Merged:</span> 1 ×{' '}
+                  {mergeName || `${mergeItem.quantity}x ${mergeItem.name}`} @{' '}
+                  {formatCurrency(mergeItem.total_price, currency)} ={' '}
+                  {formatCurrency(mergeItem.total_price, currency)}
+                </p>
+              </div>
+              <Input
+                value={mergeName}
+                onChange={(e) => setMergeName(e.target.value)}
+                placeholder="Merged item name"
+                className="text-sm"
+              />
+            </div>
+          )}
+          <p className="sm:hidden text-xs text-center text-amber-600 dark:text-amber-400 w-full">
+            Warning: This cannot be undone.
+          </p>
+          <DialogFooter>
+            <p className="hidden sm:block text-xs self-center text-amber-600 dark:text-amber-400 w-full mb-1">
+              Warning: This cannot be undone.
+            </p>
+            <Button variant="outline" onClick={() => setMergeItem(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMerge}
+              disabled={merging || !mergeName.trim()}
+            >
+              {merging ? 'Merging…' : 'Merge'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

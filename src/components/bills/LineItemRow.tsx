@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Check, X } from "lucide-react";
+import { Trash2, Check, X, Merge } from "lucide-react";
 import { toast } from "sonner";
 import { updateLineItem, deleteLineItem } from "@/app/actions/bills";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
 import type { LineItem } from "@/types/database";
 
@@ -21,6 +29,9 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
   const [unitPrice, setUnitPrice] = useState(String(item.unit_price));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeName, setMergeName] = useState("");
+  const [merging, setMerging] = useState(false);
 
   async function handleSave() {
     setSaving(true);
@@ -46,6 +57,23 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
     setQty(String(item.quantity));
     setUnitPrice(String(item.unit_price));
     setEditing(false);
+  }
+
+  async function handleMerge() {
+    setMerging(true);
+    try {
+      await updateLineItem(item.id, billId, {
+        name: mergeName,
+        quantity: 1,
+        unit_price: item.total_price,
+        total_price: item.total_price,
+      });
+      setMergeOpen(false);
+    } catch {
+      toast.error("Failed to merge item");
+    } finally {
+      setMerging(false);
+    }
   }
 
   async function handleDelete() {
@@ -114,31 +142,88 @@ export function LineItemRow({ item, billId }: LineItemRowProps) {
   }
 
   return (
-    <div
-      className="flex items-center gap-2 py-2 border-b cursor-pointer hover:bg-muted/30 -mx-1 px-1 rounded transition-colors"
-      onClick={() => setEditing(true)}
-    >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{item.name}</p>
-        <p className="text-xs text-muted-foreground">
-          {item.quantity} × {formatCurrency(item.unit_price)}
-        </p>
-      </div>
-      <p className="text-sm font-medium shrink-0">
-        {formatCurrency(item.total_price)}
-      </p>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-destructive shrink-0"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleDelete();
-        }}
-        disabled={deleting}
+    <>
+      <div
+        className="flex items-center gap-2 py-2 border-b cursor-pointer hover:bg-muted/30 -mx-1 px-1 rounded transition-colors"
+        onClick={() => setEditing(true)}
       >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{item.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {item.quantity} × {formatCurrency(item.unit_price)}
+          </p>
+        </div>
+        <div className="flex flex-col items-end shrink-0">
+          <p className="text-sm font-medium">{formatCurrency(item.total_price)}</p>
+          {item.quantity > 1 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMergeName(`${item.quantity}x ${item.name}`);
+                setMergeOpen(true);
+              }}
+              title="Merge quantities into one item"
+            >
+              <Merge className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive shrink-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete();
+          }}
+          disabled={deleting}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge quantities</DialogTitle>
+            <DialogDescription>
+              Combine {item.quantity} portions into 1 shared item to split evenly.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>
+                <span className="font-medium">Current:</span>{" "}
+                {item.quantity} × {item.name} @ {formatCurrency(item.unit_price)} ={" "}
+                {formatCurrency(item.total_price)}
+              </p>
+              <p>
+                <span className="font-medium">Merged:</span>{" "}
+                1 × {mergeName || `${item.quantity}x ${item.name}`} @ {formatCurrency(item.total_price)} ={" "}
+                {formatCurrency(item.total_price)}
+              </p>
+            </div>
+            <Input
+              value={mergeName}
+              onChange={(e) => setMergeName(e.target.value)}
+              placeholder="Merged item name"
+              className="text-sm"
+            />
+          </div>
+          <DialogFooter>
+            <p className="text-xs text-amber-600 dark:text-amber-400 w-full mb-1">This cannot be undone.</p>
+            <Button variant="outline" onClick={() => setMergeOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleMerge} disabled={merging || !mergeName.trim()}>
+              {merging ? "Merging…" : "Merge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
