@@ -11,7 +11,13 @@ import type {
 } from '@/types/database';
 import type { PaymentMethods } from '@/lib/notifications/types';
 
-export type DashboardBill = Bill & { bill_totals: BillTotal | null; owner_display_name?: string; member_count?: number; is_archived: boolean };
+export type DashboardBill = Bill & {
+  bill_totals: BillTotal | null;
+  owner_display_name?: string;
+  member_count?: number;
+  is_archived: boolean;
+  contextual_status?: 'ready_to_claim' | 'waiting_for_lock' | 'unpaid' | 'awaiting_payments' | 'paid' | 'settled';
+};
 
 export type BillPageData = {
   lineItems: LineItemWithClaims[];
@@ -108,6 +114,53 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     for (const bill of billMap.values()) {
       if (bill.status === 'verified' || bill.status === 'locked') {
         bill.member_count = (memberCountMap.get(bill.id) ?? 0) + 1; // +1 for owner
+      }
+    }
+
+    // Fetch contextual status data in parallel
+    const [
+      { data: userPaymentRows },
+      { data: userMemberRows },
+      { data: allPaymentRows },
+    ] = await Promise.all([
+      supabase
+        .from('bill_payments')
+        .select('bill_id')
+        .eq('user_id', currentUserId)
+        .in('bill_id', verifiedOrLockedBillIds),
+      supabase
+        .from('bill_members')
+        .select('bill_id, is_done')
+        .eq('user_id', currentUserId)
+        .in('bill_id', verifiedOrLockedBillIds),
+      supabase
+        .from('bill_payments')
+        .select('bill_id')
+        .in('bill_id', verifiedOrLockedBillIds),
+    ]);
+
+    const paidBillIds = new Set((userPaymentRows ?? []).map((r) => r.bill_id));
+    const doneMap = new Map((userMemberRows ?? []).map((r) => [r.bill_id, (r as unknown as { bill_id: string; is_done: boolean }).is_done]));
+    const paidCountMap = new Map<string, number>();
+    for (const row of allPaymentRows ?? []) {
+      paidCountMap.set(row.bill_id, (paidCountMap.get(row.bill_id) ?? 0) + 1);
+    }
+
+    for (const bill of billMap.values()) {
+      if (bill.status !== 'verified' && bill.status !== 'locked') continue;
+      const isOwner = bill.owner_id === currentUserId;
+      if (isOwner) {
+        const memberCount = (bill.member_count ?? 1) - 1; // subtract owner
+        const paidCount = paidCountMap.get(bill.id) ?? 0;
+        bill.contextual_status = memberCount > 0 && paidCount >= memberCount ? 'settled' : 'awaiting_payments';
+      } else {
+        if (paidBillIds.has(bill.id)) {
+          bill.contextual_status = 'paid';
+        } else if (doneMap.get(bill.id)) {
+          bill.contextual_status = bill.status === 'locked' ? 'unpaid' : 'waiting_for_lock';
+        } else {
+          bill.contextual_status = 'ready_to_claim';
+        }
       }
     }
   }

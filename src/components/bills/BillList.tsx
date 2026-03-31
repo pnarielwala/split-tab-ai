@@ -27,7 +27,7 @@ export function BillList({ bills, currentUserId }: BillListProps) {
           total={bill.bill_totals}
           isOwner={currentUserId ? bill.owner_id === currentUserId : true}
           isArchived={bill.is_archived}
-          ownerName={bill.owner_display_name}
+          contextualStatus={bill.contextual_status}
           memberCount={bill.member_count}
         />
       ))}
