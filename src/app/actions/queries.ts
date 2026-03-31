@@ -16,7 +16,7 @@ export type DashboardBill = Bill & {
   owner_display_name?: string;
   member_count?: number;
   is_archived: boolean;
-  contextual_status?: 'ready_to_claim' | 'waiting_for_lock' | 'unpaid' | 'awaiting_payments' | 'paid' | 'settled';
+  contextual_status?: 'items_to_claim' | 'ready_to_claim' | 'waiting_for_lock' | 'unpaid' | 'awaiting_payments' | 'paid' | 'settled';
 };
 
 export type BillPageData = {
@@ -118,10 +118,23 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     }
 
     // Fetch contextual status data in parallel
+    const ownerBillIds = Array.from(billMap.values())
+      .filter((b) => (b.status === 'verified' || b.status === 'locked') && b.owner_id === currentUserId)
+      .map((b) => b.id);
+
+    const ownerClaimsQuery = ownerBillIds.length > 0
+      ? supabase
+          .from('bill_item_claims')
+          .select('item_id, line_items!inner(bill_id)')
+          .eq('user_id', currentUserId)
+          .in('line_items.bill_id', ownerBillIds)
+      : null;
+
     const [
       { data: userPaymentRows },
       { data: userMemberRows },
       { data: allPaymentRows },
+      ownerClaimsResult,
     ] = await Promise.all([
       supabase
         .from('bill_payments')
@@ -137,7 +150,9 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
         .from('bill_payments')
         .select('bill_id')
         .in('bill_id', verifiedOrLockedBillIds),
+      ownerClaimsQuery ?? Promise.resolve({ data: null }),
     ]);
+    const ownerClaimRows = ownerClaimsResult.data;
 
     const paidBillIds = new Set((userPaymentRows ?? []).map((r) => r.bill_id));
     const doneMap = new Map((userMemberRows ?? []).map((r) => [r.bill_id, (r as unknown as { bill_id: string; is_done: boolean }).is_done]));
@@ -145,14 +160,21 @@ export async function getDashboardBills(): Promise<DashboardBill[]> {
     for (const row of allPaymentRows ?? []) {
       paidCountMap.set(row.bill_id, (paidCountMap.get(row.bill_id) ?? 0) + 1);
     }
+    const ownerClaimedBillIds = new Set(
+      (ownerClaimRows ?? []).map((r) => (r as unknown as { line_items: { bill_id: string } }).line_items.bill_id)
+    );
 
     for (const bill of billMap.values()) {
       if (bill.status !== 'verified' && bill.status !== 'locked') continue;
       const isOwner = bill.owner_id === currentUserId;
       if (isOwner) {
-        const memberCount = (bill.member_count ?? 1) - 1; // subtract owner
-        const paidCount = paidCountMap.get(bill.id) ?? 0;
-        bill.contextual_status = memberCount > 0 && paidCount >= memberCount ? 'settled' : 'awaiting_payments';
+        if (!ownerClaimedBillIds.has(bill.id)) {
+          bill.contextual_status = 'items_to_claim';
+        } else {
+          const memberCount = (bill.member_count ?? 1) - 1; // subtract owner
+          const paidCount = paidCountMap.get(bill.id) ?? 0;
+          bill.contextual_status = memberCount > 0 && paidCount >= memberCount ? 'settled' : 'awaiting_payments';
+        }
       } else {
         if (paidBillIds.has(bill.id)) {
           bill.contextual_status = 'paid';

@@ -11,6 +11,7 @@ const contextualStatusConfig: Record<
   string,
   { label: string; className: string }
 > = {
+  items_to_claim: { label: 'Items to claim', className: 'text-amber-500' },
   ready_to_claim: { label: 'Ready to claim', className: 'text-amber-500' },
   waiting_for_lock: { label: 'Waiting for lock', className: 'text-muted-foreground' },
   unpaid: { label: 'Unpaid', className: 'text-red-500' },
