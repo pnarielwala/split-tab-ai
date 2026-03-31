@@ -160,6 +160,57 @@ export async function deleteLineItem(itemId: string, billId: string) {
   revalidatePath(`/bills/${billId}/verify`);
 }
 
+// ── Split line item ───────────────────────────────────────────────────────────
+
+export async function splitLineItem(itemId: string, billId: string, names: string[]) {
+  const supabase = await createClient();
+
+  const { data: original, error: fetchErr } = await supabase
+    .from('line_items')
+    .select('*')
+    .eq('id', itemId)
+    .single();
+  if (fetchErr || !original) throw new Error('Item not found');
+
+  const count = names.length;
+  const basePrice = Math.floor((original.unit_price / count) * 100) / 100;
+  const remainder = Math.round((original.unit_price - basePrice * count) * 100) / 100;
+
+  const { data: laterItems } = await supabase
+    .from('line_items')
+    .select('id, sort_order')
+    .eq('bill_id', billId)
+    .gt('sort_order', original.sort_order);
+
+  await supabase.from('line_items').delete().eq('id', itemId);
+
+  if (laterItems?.length) {
+    for (const row of laterItems) {
+      await supabase
+        .from('line_items')
+        .update({ sort_order: row.sort_order + count - 1 })
+        .eq('id', row.id);
+    }
+  }
+
+  const inserts = names.map((name, i) => {
+    const price = i === count - 1 ? basePrice + remainder : basePrice;
+    return {
+      bill_id: billId,
+      name,
+      quantity: 1,
+      unit_price: price,
+      total_price: price,
+      sort_order: original.sort_order + i,
+    };
+  });
+
+  const { error: insertErr } = await supabase.from('line_items').insert(inserts);
+  if (insertErr) throw new Error(insertErr.message);
+
+  revalidatePath(`/bills/${billId}/verify`);
+}
+
 // ── Add line item ─────────────────────────────────────────────────────────────
 
 export async function addLineItem(
