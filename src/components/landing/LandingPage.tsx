@@ -211,11 +211,12 @@ export function LandingPage({ displayName }: { displayName?: string }) {
             <Receipt className="h-4 w-4" />
             <span>Split Tab AI</span>
             <span>© 2026</span>
-            <span>·</span>
-            <span>Created by Parth Narielwala</span>
           </div>
           <div className="sm:hidden">
             <NavThemeToggle />
+          </div>
+          <div className="text-sm text-muted-foreground">
+            <span>Created by Parth Narielwala</span>
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <Link
