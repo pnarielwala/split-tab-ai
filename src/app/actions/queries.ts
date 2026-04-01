@@ -6,6 +6,7 @@ import type {
   BillTotal,
   LineItemWithClaims,
   BillMemberWithProfile,
+  BillGuest,
   Profile,
   ParticipantShare,
 } from '@/types/database';
@@ -41,6 +42,7 @@ export type SplitPageData = {
   shares: ParticipantShare[];
   isLocked: boolean;
   memberDoneStatuses: { userId: string; isDone: boolean }[];
+  guests: BillGuest[];
 };
 
 export async function getDashboardBills(): Promise<DashboardBill[]> {
@@ -229,6 +231,7 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
     { data: membersRaw },
     { data: ownerProfile },
     { data: paymentsRaw },
+    { data: guestsRaw },
   ] = await Promise.all([
     supabase
       .from('line_items')
@@ -239,10 +242,16 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
     supabase.from('bill_members').select('*, profiles(*)').eq('bill_id', billId),
     supabase.from('profiles').select('*').eq('id', bill.owner_id).single(),
     supabase.from('bill_payments').select('user_id').eq('bill_id', billId),
+    // Fetched in parallel — returns {data: null, error} if migration not yet run (safe)
+    supabase.from('bill_guests').select('*').eq('bill_id', billId),
   ]);
 
   const lineItems = (lineItemsRaw ?? []) as LineItemWithClaims[];
   const members = (membersRaw ?? []) as BillMemberWithProfile[];
+  const guests = (guestsRaw ?? []) as BillGuest[];
+
+  const guestSponsorMap = new Map<string, string>();
+  for (const g of guests) guestSponsorMap.set(g.id, g.sponsored_by);
 
   const participantMap = new Map<string, string>();
   participantMap.set(bill.owner_id, ownerProfile?.display_name ?? 'Owner');
@@ -259,10 +268,12 @@ export async function getBillPageData(billId: string): Promise<BillPageData | nu
   for (const item of lineItems) {
     if (item.bill_item_claims.length === 0) continue;
     for (const claim of item.bill_item_claims) {
+      const claimerId = claim.user_id ?? guestSponsorMap.get(claim.guest_id!)!;
+      if (!claimerId) continue;
       const share = item.quantity > 1
         ? (claim.quantity_claimed / item.quantity) * item.total_price
         : item.total_price / item.bill_item_claims.length;
-      subtotals.set(claim.user_id, (subtotals.get(claim.user_id) ?? 0) + share);
+      subtotals.set(claimerId, (subtotals.get(claimerId) ?? 0) + share);
     }
   }
 
@@ -347,6 +358,7 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     { data: ownerProfileRaw },
     { data: payerProfileRawMaybe },
     { data: paymentsRaw },
+    { data: guestsRaw },
   ] = await Promise.all([
     supabase
       .from('line_items')
@@ -358,6 +370,8 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     supabase.from('profiles').select('*').eq('id', ownerId).single(),
     fetchPayerProfile,
     supabase.from('bill_payments').select('user_id').eq('bill_id', billId),
+    // Returns {data: null, error} if migration not yet run — safe to include in parallel
+    supabase.from('bill_guests').select('*').eq('bill_id', billId),
   ]);
 
   const ownerPaymentMethods = extractPaymentMethods(ownerProfileRaw);
@@ -383,6 +397,13 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
 
   const lineItems = (lineItemsRaw ?? []) as LineItemWithClaims[];
   const members = (membersRaw ?? []) as BillMemberWithProfile[];
+  const guests = (guestsRaw ?? []) as BillGuest[];
+
+  // Build guestId → sponsorUserId map for cost rollup
+  const guestSponsorMap = new Map<string, string>();
+  for (const guest of guests) {
+    guestSponsorMap.set(guest.id, guest.sponsored_by);
+  }
 
   const billSubtotal = totals?.subtotal ?? 0;
   const billTax = totals?.tax ?? 0;
@@ -398,10 +419,13 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
   for (const item of lineItems) {
     if (item.bill_item_claims.length === 0) continue;
     for (const claim of item.bill_item_claims) {
+      // Guest claims roll up to the sponsor's userId
+      const claimerId = claim.user_id ?? guestSponsorMap.get(claim.guest_id!)!;
+      if (!claimerId) continue;
       const share = item.quantity > 1
         ? (claim.quantity_claimed / item.quantity) * item.total_price
         : item.total_price / item.bill_item_claims.length;
-      subtotals.set(claim.user_id, (subtotals.get(claim.user_id) ?? 0) + share);
+      subtotals.set(claimerId, (subtotals.get(claimerId) ?? 0) + share);
     }
   }
   const shares: ParticipantShare[] = [];
@@ -433,5 +457,6 @@ export async function getSplitPageData(billId: string): Promise<SplitPageData | 
     shares,
     isLocked,
     memberDoneStatuses: members.map((m) => ({ userId: m.user_id, isDone: (m as unknown as { is_done: boolean }).is_done ?? false })),
+    guests,
   };
 }

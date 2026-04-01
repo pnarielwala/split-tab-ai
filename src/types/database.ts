@@ -57,16 +57,26 @@ export interface BillMemberWithProfile extends BillMember {
   profiles: Profile;
 }
 
+export interface BillGuest {
+  id: string;
+  bill_id: string;
+  name: string;
+  sponsored_by: string;
+  created_at: string;
+}
+
 export interface BillItemClaim {
   id: string;
   item_id: string;
-  user_id: string;
+  user_id: string | null;
+  guest_id: string | null;
   claimed_at: string;
   quantity_claimed: number;
 }
 
 export interface BillItemClaimWithProfile extends BillItemClaim {
-  profiles: Profile;
+  profiles: Profile | null;
+  bill_guests: BillGuest | null;
 }
 
 export interface LineItemWithClaims extends LineItem {

@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { PieChart, Lock, CheckCircle2, Merge } from 'lucide-react';
+import { PieChart, Lock, CheckCircle2, Merge, ChevronDown, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -36,6 +36,8 @@ import {
   lockBill,
   unlockBill,
   updateLineItem,
+  addGuest,
+  removeGuest,
 } from '@/app/actions/bills';
 import { getSplitPageData } from '@/app/actions/queries';
 import { ShareButton } from './ShareButton';
@@ -43,7 +45,8 @@ import { ViewReceiptButton } from './ViewReceiptButton';
 import { RequestPaymentButton } from './RequestPaymentButton';
 import { ChangePayerButton } from './ChangePayerButton';
 import { MarkAsPaidModal } from './MarkAsPaidModal';
-import type { LineItemWithClaims } from '@/types/database';
+import type { BillGuest, LineItemWithClaims } from '@/types/database';
+
 
 interface BillDetailProps {
   billId: string;
@@ -76,6 +79,14 @@ export function BillDetail({
   const [mergeName, setMergeName] = useState('');
   const [merging, setMerging] = useState(false);
 
+  // "Claiming for" switcher state
+  type ClaimingAs = { type: 'self' } | { type: 'guest'; guestId: string; name: string };
+  const [claimingAs, setClaimingAs] = useState<ClaimingAs>({ type: 'self' });
+  const [showAddGuest, setShowAddGuest] = useState(false);
+  const [guestNameInput, setGuestNameInput] = useState('');
+  const [addingGuest, setAddingGuest] = useState(false);
+  const [deleteGuestConfirm, setDeleteGuestConfirm] = useState<{ guestId: string; name: string } | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['split', billId],
     queryFn: () => getSplitPageData(billId),
@@ -93,6 +104,7 @@ export function BillDetail({
   const currency = totals?.currency ?? 'USD';
   const isLocked = data?.isLocked ?? false;
   const memberDoneStatuses = data?.memberDoneStatuses ?? [];
+  const guests = data?.guests ?? [];
   const currentMemberIsDone = isOwner
     ? false
     : (memberDoneStatuses.find((m) => m.userId === currentUserId)?.isDone ??
@@ -122,6 +134,24 @@ export function BillDetail({
 
   const myName = participantMap.get(currentUserId) ?? 'You';
 
+  // Build guestId → name map for badge display
+  const guestNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of guests) map.set(g.id, g.name);
+    return map;
+  }, [guests]);
+
+  function claimDisplayName(claim: { user_id: string | null; guest_id: string | null; profiles: { display_name: string } | null; bill_guests: { name: string } | null }): string {
+    if (claim.guest_id) return guestNameMap.get(claim.guest_id) ?? claim.bill_guests?.name ?? 'Guest';
+    if (claim.user_id) return participantMap.get(claim.user_id) ?? claim.profiles?.display_name ?? 'Unknown';
+    return 'Unknown';
+  }
+
+  function isActiveClaimerClaim(claim: { user_id: string | null; guest_id: string | null }): boolean {
+    if (claimingAs.type === 'guest') return claim.guest_id === claimingAs.guestId;
+    return claim.user_id === currentUserId;
+  }
+
   const [optimisticItems, addOptimistic] = useOptimistic(
     serverItems,
     (
@@ -130,11 +160,79 @@ export function BillDetail({
         itemId: string;
         action: 'claim' | 'unclaim' | 'set_quantity';
         quantity?: number;
+        guestId?: string;
+        guestName?: string;
       }
     ) =>
       state.map((item) => {
         if (item.id !== update.itemId) return item;
+        const { guestId, guestName } = update;
         if (update.action === 'claim') {
+          if (guestId) {
+            return {
+              ...item,
+              bill_item_claims: [
+                ...item.bill_item_claims.filter((c) => c.guest_id !== guestId),
+                {
+                  id: '',
+                  item_id: update.itemId,
+                  user_id: null,
+                  guest_id: guestId,
+                  claimed_at: '',
+                  quantity_claimed: 1,
+                  profiles: null,
+                  bill_guests: { id: guestId, name: guestName ?? '', bill_id: billId, sponsored_by: currentUserId, created_at: '' },
+                },
+              ],
+            };
+          }
+          return {
+            ...item,
+            bill_item_claims: [
+              ...item.bill_item_claims.filter((c) => c.user_id !== currentUserId),
+              {
+                id: '',
+                item_id: update.itemId,
+                user_id: currentUserId,
+                guest_id: null,
+                claimed_at: '',
+                quantity_claimed: 1,
+                profiles: { id: currentUserId, display_name: myName, email: null },
+                bill_guests: null,
+              },
+            ],
+          };
+        }
+        if (update.action === 'unclaim') {
+          if (guestId) {
+            return {
+              ...item,
+              bill_item_claims: item.bill_item_claims.filter((c) => c.guest_id !== guestId),
+            };
+          }
+          return {
+            ...item,
+            bill_item_claims: item.bill_item_claims.filter((c) => c.user_id !== currentUserId),
+          };
+        }
+        // set_quantity
+        const qty = update.quantity ?? 0;
+        if (guestId) {
+          if (qty <= 0) {
+            return {
+              ...item,
+              bill_item_claims: item.bill_item_claims.filter((c) => c.guest_id !== guestId),
+            };
+          }
+          const existing = item.bill_item_claims.find((c) => c.guest_id === guestId);
+          if (existing) {
+            return {
+              ...item,
+              bill_item_claims: item.bill_item_claims.map((c) =>
+                c.guest_id === guestId ? { ...c, quantity_claimed: qty } : c
+              ),
+            };
+          }
           return {
             ...item,
             bill_item_claims: [
@@ -142,39 +240,23 @@ export function BillDetail({
               {
                 id: '',
                 item_id: update.itemId,
-                user_id: currentUserId,
+                user_id: null,
+                guest_id: guestId,
                 claimed_at: '',
-                quantity_claimed: 1,
-                profiles: {
-                  id: currentUserId,
-                  display_name: myName,
-                  email: null,
-                },
+                quantity_claimed: qty,
+                profiles: null,
+                bill_guests: { id: guestId, name: guestName ?? '', bill_id: billId, sponsored_by: currentUserId, created_at: '' },
               },
             ],
           };
         }
-        if (update.action === 'unclaim') {
-          return {
-            ...item,
-            bill_item_claims: item.bill_item_claims.filter(
-              (c) => c.user_id !== currentUserId
-            ),
-          };
-        }
-        // set_quantity
-        const qty = update.quantity ?? 0;
         if (qty <= 0) {
           return {
             ...item,
-            bill_item_claims: item.bill_item_claims.filter(
-              (c) => c.user_id !== currentUserId
-            ),
+            bill_item_claims: item.bill_item_claims.filter((c) => c.user_id !== currentUserId),
           };
         }
-        const existing = item.bill_item_claims.find(
-          (c) => c.user_id === currentUserId
-        );
+        const existing = item.bill_item_claims.find((c) => c.user_id === currentUserId);
         if (existing) {
           return {
             ...item,
@@ -191,13 +273,11 @@ export function BillDetail({
               id: '',
               item_id: update.itemId,
               user_id: currentUserId,
+              guest_id: null,
               claimed_at: '',
               quantity_claimed: qty,
-              profiles: {
-                id: currentUserId,
-                display_name: myName,
-                email: null,
-              },
+              profiles: { id: currentUserId, display_name: myName, email: null },
+              bill_guests: null,
             },
           ],
         };
@@ -205,22 +285,49 @@ export function BillDetail({
   );
 
   function isClaimed(item: LineItemWithClaims) {
+    if (claimingAs.type === 'guest') {
+      return item.bill_item_claims.some((c) => c.guest_id === claimingAs.guestId);
+    }
     return item.bill_item_claims.some((c) => c.user_id === currentUserId);
+  }
+
+  function activeGuestId(): string | undefined {
+    return claimingAs.type === 'guest' ? claimingAs.guestId : undefined;
   }
 
   function handleToggle(item: LineItemWithClaims) {
     if (isCurrentUserPaid || isLocked || currentMemberIsDone) return;
     const claimed = isClaimed(item);
+    const guestId = activeGuestId();
+    const guestName = claimingAs.type === 'guest' ? claimingAs.name : undefined;
     startTransition(async () => {
-      addOptimistic({ itemId: item.id, action: claimed ? 'unclaim' : 'claim' });
+      addOptimistic({ itemId: item.id, action: claimed ? 'unclaim' : 'claim', guestId, guestName });
       if (claimed) {
-        await unclaimItem(item.id, billId);
+        await unclaimItem(item.id, billId, guestId);
       } else {
-        await claimItem(item.id, billId);
+        await claimItem(item.id, billId, guestId);
       }
       queryClient.invalidateQueries({ queryKey: ['split', billId] });
       queryClient.invalidateQueries({ queryKey: ['bill', billId] });
     });
+  }
+
+  async function handleAddGuest() {
+    if (!guestNameInput.trim()) return;
+    setAddingGuest(true);
+    try {
+      const result = await addGuest(billId, guestNameInput.trim());
+      if ('error' in result) {
+        toast.error(result.error);
+      } else {
+        setClaimingAs({ type: 'guest', guestId: result.id, name: result.name });
+        setShowAddGuest(false);
+        setGuestNameInput('');
+        queryClient.invalidateQueries({ queryKey: ['split', billId] });
+      }
+    } finally {
+      setAddingGuest(false);
+    }
   }
 
   async function handleMerge() {
@@ -242,6 +349,12 @@ export function BillDetail({
     }
   }
 
+  // My guests (sponsored_by me)
+  const myGuestIds = useMemo(
+    () => new Set(guests.filter((g) => g.sponsored_by === currentUserId).map((g) => g.id)),
+    [guests, currentUserId]
+  );
+
   const myShare = useMemo(() => {
     const billSubtotal = totals?.subtotal ?? 0;
     const billTax = totals?.tax ?? 0;
@@ -251,15 +364,17 @@ export function BillDetail({
 
     let subtotal = 0;
     for (const item of optimisticItems) {
-      const myClaim = item.bill_item_claims.find(
-        (c) => c.user_id === currentUserId
-      );
-      if (!myClaim) continue;
-      const share =
-        item.quantity > 1
-          ? (myClaim.quantity_claimed / item.quantity) * item.total_price
-          : item.total_price / item.bill_item_claims.length;
-      subtotal += share;
+      for (const claim of item.bill_item_claims) {
+        // Include my own claims and my guests' claims
+        const isMineClaim = claim.user_id === currentUserId;
+        const isMyGuestClaim = claim.guest_id != null && myGuestIds.has(claim.guest_id);
+        if (!isMineClaim && !isMyGuestClaim) continue;
+        const share =
+          item.quantity > 1
+            ? (claim.quantity_claimed / item.quantity) * item.total_price
+            : item.total_price / item.bill_item_claims.length;
+        subtotal += share;
+      }
     }
 
     const ratio = billSubtotal > 0 ? subtotal / billSubtotal : 0;
@@ -275,7 +390,7 @@ export function BillDetail({
       discounts,
       total: subtotal + tax + gratuity + fees - discounts,
     };
-  }, [optimisticItems, totals, currentUserId]);
+  }, [optimisticItems, totals, currentUserId, myGuestIds]);
 
   if (isLoading) {
     return (
@@ -576,24 +691,83 @@ export function BillDetail({
 
       {/* Item list */}
       <div>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-          {isLocked
-            ? 'Claimed items (bill locked)'
-            : isCurrentUserPaid || currentMemberIsDone
-              ? 'Your claimed items'
-              : 'Tap to claim items'}
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            {isLocked
+              ? 'Claimed items (bill locked)'
+              : isCurrentUserPaid || currentMemberIsDone
+                ? 'Your claimed items'
+                : 'Tap to claim items'}
+          </h2>
+          {!isLocked && !isCurrentUserPaid && !currentMemberIsDone && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">for</span>
+              <div className="relative">
+                <select
+                  value={claimingAs.type === 'guest' ? claimingAs.guestId : '__self__'}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '__self__') {
+                      setClaimingAs({ type: 'self' });
+                    } else if (val === '__add__') {
+                      setShowAddGuest(true);
+                    } else {
+                      const guest = guests.find((g) => g.id === val);
+                      if (guest) setClaimingAs({ type: 'guest', guestId: guest.id, name: guest.name });
+                    }
+                  }}
+                  className="appearance-none bg-background border rounded-md pl-2.5 pr-7 py-1 text-xs font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="__self__">Myself</option>
+                  {guests.filter((g) => g.sponsored_by === currentUserId).map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                  <option value="__add__">+ Add guest</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              </div>
+              {claimingAs.type === 'guest' && (
+                <button
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  title={`Remove ${claimingAs.name}`}
+                  onClick={() => {
+                    const { guestId, name } = claimingAs;
+                    const hasClaims = optimisticItems.some((item) =>
+                      item.bill_item_claims.some((c) => c.guest_id === guestId)
+                    );
+                    if (hasClaims) {
+                      setDeleteGuestConfirm({ guestId, name });
+                    } else {
+                      removeGuest(guestId, billId).then((result) => {
+                        if ('error' in result) {
+                          toast.error(result.error);
+                        } else {
+                          setClaimingAs({ type: 'self' });
+                          queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                        }
+                      });
+                    }
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div className="space-y-0">
           {optimisticItems.map((item) => {
-            const myClaim = item.bill_item_claims.find(
-              (c) => c.user_id === currentUserId
-            );
+            const guestId = activeGuestId();
+            const guestName = claimingAs.type === 'guest' ? claimingAs.name : undefined;
+            const myClaim = guestId
+              ? item.bill_item_claims.find((c) => c.guest_id === guestId)
+              : item.bill_item_claims.find((c) => c.user_id === currentUserId);
             const claimed = !!myClaim;
             const myQty = myClaim?.quantity_claimed ?? 0;
 
             if (item.quantity > 1) {
               const othersClaimed = item.bill_item_claims
-                .filter((c) => c.user_id !== currentUserId)
+                .filter((c) => guestId ? c.guest_id !== guestId : c.user_id !== currentUserId)
                 .reduce((sum, c) => sum + c.quantity_claimed, 0);
               const maxClaimable = item.quantity - othersClaimed;
               const readOnly =
@@ -615,8 +789,10 @@ export function BillDetail({
                               itemId: item.id,
                               action: 'set_quantity',
                               quantity: next,
+                              guestId,
+                              guestName,
                             });
-                            await setClaimedQuantity(item.id, billId, next);
+                            await setClaimedQuantity(item.id, billId, next, guestId);
                             queryClient.invalidateQueries({
                               queryKey: ['split', billId],
                             });
@@ -642,8 +818,10 @@ export function BillDetail({
                               itemId: item.id,
                               action: 'set_quantity',
                               quantity: next,
+                              guestId,
+                              guestName,
                             });
-                            await setClaimedQuantity(item.id, billId, next);
+                            await setClaimedQuantity(item.id, billId, next, guestId);
                             queryClient.invalidateQueries({
                               queryKey: ['split', billId],
                             });
@@ -683,17 +861,11 @@ export function BillDetail({
                         <div className="flex flex-wrap items-center gap-1">
                           {item.bill_item_claims.map((claim) => (
                             <Badge
-                              key={claim.user_id}
-                              variant={
-                                claim.user_id === currentUserId
-                                  ? 'default'
-                                  : 'secondary'
-                              }
+                              key={claim.guest_id ?? claim.user_id}
+                              variant={isActiveClaimerClaim(claim) ? 'default' : 'secondary'}
                               className={`text-xs h-5${readOnly ? ' pointer-events-none' : ''}`}
                             >
-                              {participantMap.get(claim.user_id) ??
-                                claim.profiles.display_name}
-                              : {claim.quantity_claimed}
+                              {claimDisplayName(claim)}: {claim.quantity_claimed}
                             </Badge>
                           ))}
                         </div>
@@ -757,16 +929,11 @@ export function BillDetail({
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {item.bill_item_claims.map((claim) => (
                         <Badge
-                          key={claim.user_id}
-                          variant={
-                            claim.user_id === currentUserId
-                              ? 'default'
-                              : 'secondary'
-                          }
+                          key={claim.guest_id ?? claim.user_id}
+                          variant={isActiveClaimerClaim(claim) ? 'default' : 'secondary'}
                           className="text-xs h-5"
                         >
-                          {participantMap.get(claim.user_id) ??
-                            claim.profiles.display_name}
+                          {claimDisplayName(claim)}
                         </Badge>
                       ))}
                     </div>
@@ -831,72 +998,69 @@ export function BillDetail({
             </DialogHeader>
             <div className="space-y-4 overflow-hidden">
               {(() => {
-                const claimed = optimisticItems.filter((item) =>
-                  item.bill_item_claims.some((c) => c.user_id === currentUserId)
-                );
-                const unclaimed = optimisticItems.filter(
-                  (item) =>
-                    !item.bill_item_claims.some(
-                      (c) => c.user_id === currentUserId
-                    )
-                );
+                type ClaimEntry = {
+                  key: string;
+                  item: LineItemWithClaims;
+                  guestLabel: string | null;
+                  qty: number;
+                  price: number;
+                };
+                const entries: ClaimEntry[] = [];
+                for (const item of optimisticItems) {
+                  for (const claim of item.bill_item_claims) {
+                    const isMine = claim.user_id === currentUserId;
+                    const isMyGuest = claim.guest_id != null && myGuestIds.has(claim.guest_id);
+                    if (!isMine && !isMyGuest) continue;
+                    const qty = claim.quantity_claimed ?? 1;
+                    const price = item.quantity > 1
+                      ? (qty / item.quantity) * item.total_price
+                      : item.total_price / item.bill_item_claims.length;
+                    entries.push({
+                      key: `${item.id}-${claim.guest_id ?? 'self'}`,
+                      item,
+                      guestLabel: isMyGuest ? (guestNameMap.get(claim.guest_id!) ?? 'Guest') : null,
+                      qty,
+                      price,
+                    });
+                  }
+                }
+                const claimedItemIds = new Set(entries.map((e) => e.item.id));
+                const unclaimed = optimisticItems.filter((item) => !claimedItemIds.has(item.id));
+                const totalQty = entries.reduce((sum, e) => sum + e.qty, 0);
                 return (
                   <>
                     <div>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                        Your items (
-                        {claimed.reduce((sum, item) => {
-                          const qty =
-                            item.bill_item_claims.find(
-                              (c) => c.user_id === currentUserId
-                            )?.quantity_claimed ?? 1;
-                          return sum + qty;
-                        }, 0)}
-                        )
+                        Your items ({totalQty})
                       </p>
-                      {claimed.length === 0 ? (
+                      {entries.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           None — you haven&apos;t claimed anything.
                         </p>
                       ) : (
                         <div className="space-y-0">
-                          {claimed.map((item) => {
-                            const myClaim = item.bill_item_claims.find(
-                              (c) => c.user_id === currentUserId
-                            );
-                            const myQty = myClaim?.quantity_claimed ?? 1;
-                            const myPrice =
-                              item.quantity > 1
-                                ? (myQty / item.quantity) * item.total_price
-                                : item.total_price /
-                                  item.bill_item_claims.length;
-                            return (
-                              <div
-                                key={item.id}
-                                className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
-                              >
-                                <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
-                                  <p className="font-medium truncate">
-                                    {item.name}
-                                  </p>
-                                  {item.quantity > 1 && (
-                                    <span className="shrink-0 text-muted-foreground">
-                                      ×{myQty}
-                                    </span>
-                                  )}
-                                  {item.quantity === 1 &&
-                                    item.bill_item_claims.length > 1 && (
-                                      <span className="shrink-0 text-muted-foreground">
-                                        shared
-                                      </span>
-                                    )}
-                                </div>
-                                <span className="shrink-0 text-muted-foreground">
-                                  {formatCurrency(myPrice, currency)}
-                                </span>
+                          {entries.map((entry) => (
+                            <div
+                              key={entry.key}
+                              className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
+                            >
+                              <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
+                                <p className="font-medium truncate">{entry.item.name}</p>
+                                {entry.item.quantity > 1 && (
+                                  <span className="shrink-0 text-muted-foreground">×{entry.qty}</span>
+                                )}
+                                {entry.item.quantity === 1 && entry.item.bill_item_claims.length > 1 && (
+                                  <span className="shrink-0 text-muted-foreground">shared</span>
+                                )}
+                                {entry.guestLabel && (
+                                  <span className="shrink-0 text-muted-foreground">for {entry.guestLabel}</span>
+                                )}
                               </div>
-                            );
-                          })}
+                              <span className="shrink-0 text-muted-foreground">
+                                {formatCurrency(entry.price, currency)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -911,9 +1075,7 @@ export function BillDetail({
                               key={item.id}
                               className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm text-muted-foreground overflow-hidden"
                             >
-                              <p className="truncate min-w-0 flex-1">
-                                {item.name}
-                              </p>
+                              <p className="truncate min-w-0 flex-1">{item.name}</p>
                               <span className="shrink-0">
                                 {formatCurrency(item.total_price, currency)}
                               </span>
@@ -982,64 +1144,66 @@ export function BillDetail({
               </DialogDescription>
             </DialogHeader>
             {(() => {
-              const claimed = optimisticItems.filter((item) =>
-                item.bill_item_claims.some((c) => c.user_id === currentUserId)
-              );
+              type ClaimEntry = {
+                key: string;
+                item: LineItemWithClaims;
+                guestLabel: string | null;
+                qty: number;
+                price: number;
+              };
+              const entries: ClaimEntry[] = [];
+              for (const item of optimisticItems) {
+                for (const claim of item.bill_item_claims) {
+                  const isMine = claim.user_id === currentUserId;
+                  const isMyGuest = claim.guest_id != null && myGuestIds.has(claim.guest_id);
+                  if (!isMine && !isMyGuest) continue;
+                  const qty = claim.quantity_claimed ?? 1;
+                  const price = item.quantity > 1
+                    ? (qty / item.quantity) * item.total_price
+                    : item.total_price / item.bill_item_claims.length;
+                  entries.push({
+                    key: `${item.id}-${claim.guest_id ?? 'self'}`,
+                    item,
+                    guestLabel: isMyGuest ? (guestNameMap.get(claim.guest_id!) ?? 'Guest') : null,
+                    qty,
+                    price,
+                  });
+                }
+              }
+              const totalQty = entries.reduce((sum, e) => sum + e.qty, 0);
               return (
                 <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                    Your items (
-                    {claimed.reduce((sum, item) => {
-                      const qty =
-                        item.bill_item_claims.find(
-                          (c) => c.user_id === currentUserId
-                        )?.quantity_claimed ?? 1;
-                      return sum + qty;
-                    }, 0)}
-                    )
+                    Your items ({totalQty})
                   </p>
-                  {claimed.length === 0 ? (
+                  {entries.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       None — you haven&apos;t claimed anything.
                     </p>
                   ) : (
                     <div className="space-y-0">
-                      {claimed.map((item) => {
-                        const myClaim = item.bill_item_claims.find(
-                          (c) => c.user_id === currentUserId
-                        );
-                        const myQty = myClaim?.quantity_claimed ?? 1;
-                        const myPrice =
-                          item.quantity > 1
-                            ? (myQty / item.quantity) * item.total_price
-                            : item.total_price / item.bill_item_claims.length;
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
-                          >
-                            <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
-                              <p className="font-medium truncate">
-                                {item.name}
-                              </p>
-                              {item.quantity > 1 && (
-                                <span className="shrink-0 text-muted-foreground">
-                                  ×{myQty}
-                                </span>
-                              )}
-                              {item.quantity === 1 &&
-                                item.bill_item_claims.length > 1 && (
-                                  <span className="shrink-0 text-muted-foreground">
-                                    shared
-                                  </span>
-                                )}
-                            </div>
-                            <span className="shrink-0 text-muted-foreground">
-                              {formatCurrency(myPrice, currency)}
-                            </span>
+                      {entries.map((entry) => (
+                        <div
+                          key={entry.key}
+                          className="flex items-baseline justify-between gap-2 py-1.5 border-b last:border-b-0 text-sm overflow-hidden"
+                        >
+                          <div className="flex items-baseline gap-1 min-w-0 flex-1 overflow-hidden">
+                            <p className="font-medium truncate">{entry.item.name}</p>
+                            {entry.item.quantity > 1 && (
+                              <span className="shrink-0 text-muted-foreground">×{entry.qty}</span>
+                            )}
+                            {entry.item.quantity === 1 && entry.item.bill_item_claims.length > 1 && (
+                              <span className="shrink-0 text-muted-foreground">shared</span>
+                            )}
+                            {entry.guestLabel && (
+                              <span className="shrink-0 text-muted-foreground">for {entry.guestLabel}</span>
+                            )}
                           </div>
-                        );
-                      })}
+                          <span className="shrink-0 text-muted-foreground">
+                            {formatCurrency(entry.price, currency)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -1226,6 +1390,83 @@ export function BillDetail({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Add Guest Modal */}
+      <Dialog
+        open={showAddGuest}
+        onOpenChange={(open) => {
+          if (!open) { setShowAddGuest(false); setGuestNameInput(''); }
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add a guest</DialogTitle>
+            <DialogDescription>
+              Paying for someone who doesn&apos;t have an account? Add them as a guest so you can claim items on their behalf. Their costs will roll up into your total.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            placeholder="Guest name (e.g. Jane)"
+            value={guestNameInput}
+            onChange={(e) => setGuestNameInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); handleAddGuest(); }
+            }}
+            className="text-sm"
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setShowAddGuest(false); setGuestNameInput(''); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={addingGuest || !guestNameInput.trim()}
+              onClick={handleAddGuest}
+            >
+              {addingGuest ? 'Adding…' : 'Add guest'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Guest Warning Modal */}
+      <Dialog
+        open={!!deleteGuestConfirm}
+        onOpenChange={(open) => { if (!open) setDeleteGuestConfirm(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove {deleteGuestConfirm?.name}?</DialogTitle>
+            <DialogDescription>
+              {deleteGuestConfirm?.name} has claimed items on this bill. Removing them will also delete all their claims.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteGuestConfirm(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteGuestConfirm) return;
+                const result = await removeGuest(deleteGuestConfirm.guestId, billId);
+                if ('error' in result) {
+                  toast.error(result.error);
+                } else {
+                  setClaimingAs({ type: 'self' });
+                  queryClient.invalidateQueries({ queryKey: ['split', billId] });
+                }
+                setDeleteGuestConfirm(null);
+              }}
+            >
+              Remove guest
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={!!mergeItem}

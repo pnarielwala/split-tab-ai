@@ -324,9 +324,54 @@ export async function joinBill(billId: string) {
   redirect(`/bills/${billId}?joined=1`);
 }
 
+// ── Add guest ─────────────────────────────────────────────────────────────────
+
+export async function addGuest(
+  billId: string,
+  name: string
+): Promise<{ id: string; name: string; sponsored_by: string; bill_id: string; created_at: string } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Unauthorized' };
+
+  const trimmed = name.trim();
+  if (!trimmed) return { error: 'Name is required' };
+
+  const { data, error } = await supabase
+    .from('bill_guests')
+    .insert({ bill_id: billId, name: trimmed, sponsored_by: user.id })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  revalidatePath(`/bills/${billId}`);
+  return data;
+}
+
+// ── Remove guest ──────────────────────────────────────────────────────────────
+
+export async function removeGuest(
+  guestId: string,
+  billId: string
+): Promise<{ error: string } | { success: true }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Unauthorized' };
+
+  const { error } = await supabase
+    .from('bill_guests')
+    .delete()
+    .eq('id', guestId)
+    .eq('sponsored_by', user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/bills/${billId}`);
+  return { success: true };
+}
+
 // ── Claim item ────────────────────────────────────────────────────────────────
 
-export async function claimItem(itemId: string, billId: string) {
+export async function claimItem(itemId: string, billId: string, guestId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -334,14 +379,30 @@ export async function claimItem(itemId: string, billId: string) {
 
   if (!user) redirect('/login');
 
-  const { error } = await supabase
-    .from('bill_item_claims')
-    .upsert(
-      { item_id: itemId, user_id: user.id },
-      { onConflict: 'item_id,user_id' }
-    );
+  // Delete+insert for all claims — avoids ON CONFLICT with partial indexes
+  // (migration 0015 drops the full unique constraint; PostgREST can't resolve partial indexes)
+  if (guestId) {
+    await supabase
+      .from('bill_item_claims')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('guest_id', guestId);
+    const { error } = await supabase
+      .from('bill_item_claims')
+      .insert({ item_id: itemId, guest_id: guestId, user_id: null });
+    if (error) throw new Error(error.message);
+  } else {
+    await supabase
+      .from('bill_item_claims')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('user_id', user.id);
+    const { error } = await supabase
+      .from('bill_item_claims')
+      .insert({ item_id: itemId, user_id: user.id });
+    if (error) throw new Error(error.message);
+  }
 
-  if (error) throw new Error(error.message);
   revalidatePath(`/bills/${billId}/split`);
 }
 
@@ -465,7 +526,7 @@ export async function markAsUnpaid(
 
 // ── Set claimed quantity (quantity=0 removes claim) ───────────────────────────
 
-export async function setClaimedQuantity(itemId: string, billId: string, quantity: number) {
+export async function setClaimedQuantity(itemId: string, billId: string, quantity: number, guestId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -473,21 +534,32 @@ export async function setClaimedQuantity(itemId: string, billId: string, quantit
 
   if (!user) redirect('/login');
 
-  if (quantity <= 0) {
-    const { error } = await supabase
+  if (guestId) {
+    // Guest claims: delete then re-insert (avoids partial index upsert issues)
+    await supabase
+      .from('bill_item_claims')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('guest_id', guestId);
+    if (quantity > 0) {
+      const { error } = await supabase
+        .from('bill_item_claims')
+        .insert({ item_id: itemId, guest_id: guestId, user_id: null, quantity_claimed: quantity });
+      if (error) throw new Error(error.message);
+    }
+  } else {
+    // Delete then re-insert — avoids ON CONFLICT with partial indexes
+    await supabase
       .from('bill_item_claims')
       .delete()
       .eq('item_id', itemId)
       .eq('user_id', user.id);
-    if (error) throw new Error(error.message);
-  } else {
-    const { error } = await supabase
-      .from('bill_item_claims')
-      .upsert(
-        { item_id: itemId, user_id: user.id, quantity_claimed: quantity },
-        { onConflict: 'item_id,user_id' }
-      );
-    if (error) throw new Error(error.message);
+    if (quantity > 0) {
+      const { error } = await supabase
+        .from('bill_item_claims')
+        .insert({ item_id: itemId, user_id: user.id, quantity_claimed: quantity });
+      if (error) throw new Error(error.message);
+    }
   }
 
   revalidatePath(`/bills/${billId}/split`);
@@ -656,7 +728,7 @@ export async function unarchiveBill(billId: string): Promise<{ error: string } |
 
 // ── Unclaim item ──────────────────────────────────────────────────────────────
 
-export async function unclaimItem(itemId: string, billId: string) {
+export async function unclaimItem(itemId: string, billId: string, guestId?: string) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -664,12 +736,21 @@ export async function unclaimItem(itemId: string, billId: string) {
 
   if (!user) redirect('/login');
 
-  const { error } = await supabase
-    .from('bill_item_claims')
-    .delete()
-    .eq('item_id', itemId)
-    .eq('user_id', user.id);
+  if (guestId) {
+    const { error } = await supabase
+      .from('bill_item_claims')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('guest_id', guestId);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase
+      .from('bill_item_claims')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('user_id', user.id);
+    if (error) throw new Error(error.message);
+  }
 
-  if (error) throw new Error(error.message);
   revalidatePath(`/bills/${billId}/split`);
 }
