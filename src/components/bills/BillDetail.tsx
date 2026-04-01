@@ -1406,7 +1406,6 @@ export function BillDetail({
             </DialogDescription>
           </DialogHeader>
           <Input
-            autoFocus
             placeholder="Guest name (e.g. Jane)"
             value={guestNameInput}
             onChange={(e) => setGuestNameInput(e.target.value)}
