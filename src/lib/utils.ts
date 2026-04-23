@@ -14,6 +14,14 @@ export function formatCurrency(amount: number | null | undefined, currency = "US
   }).format(amount);
 }
 
+export function formatShortDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function formatDistanceToNow(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
