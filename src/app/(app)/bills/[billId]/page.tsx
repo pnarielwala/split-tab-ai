@@ -101,16 +101,16 @@ export default async function BillPage({ params }: Props) {
               <Users className="h-4 w-4" />
               {(memberCount ?? 0) + 1}
             </span>
-            <div className="ml-auto flex flex-col items-end gap-0.5">
-              <Badge variant={status.variant}>{status.label}</Badge>
-              <span className="text-xs text-muted-foreground">
-                {formatShortDate(bill.created_at)}
-              </span>
-            </div>
+            <Badge variant={status.variant} className="ml-auto">{status.label}</Badge>
           </div>
-          {bill.description && (
-            <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>
-          )}
+          <div className="flex items-baseline gap-2 mt-1">
+            {bill.description && (
+              <p className="text-sm text-muted-foreground">{bill.description}</p>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">
+              {formatShortDate(bill.created_at)}
+            </span>
+          </div>
         </div>
         {showDetail ? (
           <BillDetail
