@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { DeleteBillButton } from "@/components/bills/DeleteBillButton";
 import { WhatDoIDoHeaderButton } from "@/components/bills/WhatDoIDoHeaderButton";
 import { Users } from "lucide-react";
+import { formatShortDate } from "@/lib/utils";
 
 interface Props {
   params: Promise<{ billId: string }>;
@@ -105,6 +106,9 @@ export default async function BillPage({ params }: Props) {
           {bill.description && (
             <p className="text-sm text-muted-foreground mt-1">{bill.description}</p>
           )}
+          <p className="text-xs text-muted-foreground mt-1">
+            {formatShortDate(bill.created_at)}
+          </p>
         </div>
         {showDetail ? (
           <BillDetail
