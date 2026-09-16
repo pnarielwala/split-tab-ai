@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:migrate": "bun --env-file=.env.local scripts/migrate.ts"
+    "test": "bun test",
+    "db:migrate": "bun --env-file=.env.local scripts/migrate.ts",
+    "parse:receipt": "bun --env-file=.env.local scripts/parse-receipt.ts"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^2.22.0",
     "@hookform/resolvers": "^3.10.0",
     "@huggingface/transformers": "^3.4.1",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -36,6 +38,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -48,6 +48,7 @@ export default async function VerifyPage({ params }: Props) {
           lineItems={lineItems ?? []}
           totals={totals ?? null}
           receiptUrl={bill.receipt_url ?? ""}
+          receiptSubtotal={bill.receipt_subtotal}
           initialName={bill.name}
           initialDescription={bill.description ?? ""}
         />

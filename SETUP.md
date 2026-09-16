@@ -40,9 +40,10 @@ bun dev
 
 App runs at [http://localhost:3000](http://localhost:3000)
 
-## 5. AI Model (Gemini 2.0 Flash)
+## 5. AI Model (Gemini)
 
-Receipt parsing uses the **Gemini 2.0 Flash** API — no local model download required.
+Receipt parsing uses the **Gemini API** via the `@google/genai` SDK — no local
+model download required.
 
 1. Get a free API key at [aistudio.google.com](https://aistudio.google.com) → "Get API key"
 2. Add to `.env.local`:
@@ -51,6 +52,26 @@ Receipt parsing uses the **Gemini 2.0 Flash** API — no local model download re
    ```
 
 Free tier: 1,500 requests/day. Each parse takes ~2 seconds.
+
+### Choosing a model
+
+The default is `gemini-3.8-flash`. Override it, and the thinking budget, without
+a code change:
+
+```
+GEMINI_MODEL=gemini-3.7-flash
+GEMINI_THINKING_BUDGET=1024     # -1 dynamic, 0 off (default)
+```
+
+**Do not switch to a `flash-lite` model.** Every lite variant tested (2.5, 3.1,
+3.5) misreads receipts whose amount column is printed offset by a line, with or
+without a thinking budget. Every full `flash` model reads them correctly.
+
+Check any replacement against a real receipt before shipping it:
+
+```
+bun parse:receipt ~/Downloads/receipt.jpg --expect 307
+```
 
 ## Bill Flow
 

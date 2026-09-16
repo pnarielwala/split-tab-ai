@@ -11,6 +11,10 @@ export interface Bill {
   status: BillStatus;
   receipt_path: string | null;
   receipt_url: string | null;
+  /** Subtotal printed on the receipt, per the parser. Compared against the line items to catch bad parses. */
+  receipt_subtotal: number | null;
+  /** Total printed on the receipt, per the parser. */
+  receipt_total: number | null;
 }
 
 export interface LineItem {

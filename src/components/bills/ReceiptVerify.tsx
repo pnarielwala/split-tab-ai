@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect } from "react";
-import { Plus, RefreshCw, Info } from "lucide-react";
+import { Plus, RefreshCw, Info, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { addLineItem, updateBillTotals, confirmBill, clearBillParseData, updateBillDetails } from "@/app/actions/bills";
 import { LineItemRow } from "./LineItemRow";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
+import { reconcileSubtotal, describeReconciliation } from "@/lib/reconcile";
 import type { LineItem, BillTotal } from "@/types/database";
 
 interface ReceiptVerifyProps {
@@ -18,11 +19,13 @@ interface ReceiptVerifyProps {
   lineItems: LineItem[];
   totals: BillTotal | null;
   receiptUrl: string;
+  /** Subtotal printed on the receipt, per the parser. Null when it could not be read. */
+  receiptSubtotal: number | null;
   initialName: string;
   initialDescription: string;
 }
 
-export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialName, initialDescription }: ReceiptVerifyProps) {
+export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, receiptSubtotal, initialName, initialDescription }: ReceiptVerifyProps) {
   const [isPending, startTransition] = useTransition();
   const [isReparsing, setIsReparsing] = useState(false);
   const [showGratuityInfo, setShowGratuityInfo] = useState(false);
@@ -163,6 +166,13 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
   const discountsVal = discounts !== "" ? parseFloat(discounts) || 0 : totals?.discounts ?? 0;
   const computedTotal = subtotal + taxVal + gratuityVal + feesVal - discountsVal;
 
+  // Recomputed on every render, so the warning clears the moment the items are
+  // corrected — no stale flag to keep in sync.
+  const reconciliation = reconcileSubtotal(subtotal, receiptSubtotal);
+  const reconciliationMessage = describeReconciliation(reconciliation, (n) =>
+    formatCurrency(n, totals?.currency ?? "USD")
+  );
+
   if (isReparsing) {
     return <ParseLoadingState />;
   }
@@ -198,6 +208,27 @@ export function ReceiptVerify({ billId, lineItems, totals, receiptUrl, initialNa
       </div>
 
       <Separator />
+
+      {/* Parse check: the items we extracted vs. the subtotal printed on the receipt */}
+      {reconciliationMessage && (
+        <div
+          role="status"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+        >
+          <div className="flex gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+            <div className="space-y-1">
+              <p className="font-medium text-amber-700 dark:text-amber-300">
+                These items don&apos;t match the receipt
+              </p>
+              <p className="text-muted-foreground">{reconciliationMessage}</p>
+              <p className="text-muted-foreground">
+                Check the receipt for a missing or duplicated item before confirming.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Line items */}
       <div>

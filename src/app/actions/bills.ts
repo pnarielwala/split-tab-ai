@@ -263,7 +263,7 @@ export async function clearBillParseData(billId: string) {
   await supabase.from('bill_totals').delete().eq('bill_id', billId);
   const { error } = await supabase
     .from('bills')
-    .update({ status: 'uploaded' })
+    .update({ status: 'uploaded', receipt_subtotal: null, receipt_total: null })
     .eq('id', billId);
   if (error) throw new Error(error.message);
 }
