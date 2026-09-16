@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "test": "bun test",
-    "db:migrate": "bun --env-file=.env.local scripts/migrate.ts"
+    "db:migrate": "bun --env-file=.env.local scripts/migrate.ts",
+    "parse:receipt": "bun --env-file=.env.local scripts/parse-receipt.ts"
   },
   "dependencies": {
     "@google/genai": "^2.22.0",

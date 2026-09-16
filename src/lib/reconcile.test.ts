@@ -49,6 +49,20 @@ describe('the Local Cantina receipt', () => {
     expect(r.difference).toBe(14);
   });
 
+  test('an invented row is caught', () => {
+    // Observed from the parser: rather than shifting the amount column, it kept
+    // the naive visual pairing and added a 5th "Mango Marg" to absorb the
+    // orphan 14.00 printed above the first item name — 20 items, not 19.
+    const invented = [...PRICES, 6];
+    const r = reconcileSubtotal(sumLineItems(items(invented)), PRINTED_SUBTOTAL);
+
+    expect(invented).toHaveLength(20);
+    expect(r.itemsSum).toBe(313);
+    expect(r.status).toBe('mismatch');
+    expect(r.difference).toBe(-6);
+    expect(describeReconciliation(r, fmt)).toContain("that's $6.00 too much");
+  });
+
   test('repairing the items clears the mismatch', () => {
     const dropped = PRICES.filter((_, i) => i !== 16);
     const repaired = [...dropped, 7];

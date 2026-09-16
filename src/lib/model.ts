@@ -79,11 +79,22 @@ Before writing anything, count the printed item rows and count the printed price
 
 NEVER merge, group, deduplicate or collapse rows. If the same item name is printed on two or more separate rows (e.g. "Side Street Corn" printed twice in a row, or "Mango Marg" printed four times), each printed row is its own line item with its own price. Do NOT combine them into one row with quantity 2 or more, and do NOT assume a repeated line is an OCR duplicate. Repeated adjacent identical names are normal and expected — a table of people frequently orders the same thing.
 
-CRITICAL — matching prices to names. Receipt photos are skewed, curled or shot at an angle, and thermal printers often print the amount column offset by a line, so the price that LOOKS vertically aligned with an item name is frequently the price of a neighbouring row. Do not trust vertical alignment alone. Instead:
-- Read the item names top-to-bottom as one ordered list, and the amounts in the item block top-to-bottom as a second ordered list.
-- The two lists must be the same length. Pair them by position: the Nth name gets the Nth amount.
-- If a name appears to have no price, or an amount appears to have no name, or the two lists differ in length, the amount column is offset by one row. Shift the entire amount column by one row (up or down) and re-pair, then re-check.
-- Use plausibility to confirm the pairing: a pitcher, bottle or premium spirit costs more than a single house drink; a "Side" costs less than an entree; identical item names should normally carry identical prices unless a size or premium modifier is printed. A pairing that makes a side dish cost more than a pitcher is a symptom of a one-row offset, not a real price.
+CRITICAL — matching amounts to names. This is where receipt parsing goes wrong most often, so work through it deliberately.
+
+Thermal printers frequently print the amount column offset by a full text line from the item names, and photographs are skewed or curled on top of that. The amount that LOOKS vertically aligned with a name is often the amount belonging to a neighbouring row. Never pair by vertical position. Use this procedure instead:
+1. Read the item NAMES top to bottom as one ordered list. This list is authoritative: there are exactly as many line items as there are printed names — never more, never fewer.
+2. Read the AMOUNTS in the item block top to bottom as a second ordered list.
+3. Pair strictly by position. The 1st name takes the 1st amount, the 2nd name the 2nd amount, and so on to the end. Ignore how the two columns appear to line up on the page.
+4. NEVER invent, duplicate or split a line item in order to absorb a leftover amount, and never drop an amount to make things fit. If an amount seems left over, your pairing is wrong — not the receipt. Return to step 3 and re-pair from the top.
+
+Signs the amount column is printed offset by one line. Expect these; they are common, and none of them mean an item is missing:
+- the topmost amount sits ABOVE the first item name
+- the last item name sits BELOW the bottom-most amount
+- pairing by vertical position leaves the final name with no amount
+- pairing by vertical position produces an implausible price: a side dish or a bag of chips priced like a pitcher, a pitcher or premium bottle priced like a single side, or two identical item names carrying wildly different prices
+In every one of these cases the two lists are still the SAME length. Pair the 1st name with the 1st amount exactly as in step 3. Do not add a row, do not remove a row, do not shift the names.
+
+Use plausibility as a final confirmation: a pitcher, bottle or premium spirit costs more than a single house drink; a "Side" costs less than an entree; identical item names normally carry identical prices unless a size or premium modifier is printed.
 
 Quantity rules:
 - A number that is part of the dish name is NOT a quantity. "Pick 2 Tacos", "Pick 3 Tacos", "3 Amigos Platter", "6oz Sirloin" are all quantity 1 with the number kept in "name".
@@ -111,15 +122,21 @@ If a line item has per-item adjustments listed beneath it (add topping, add flav
 
 === VERIFY BEFORE YOU ANSWER ===
 Do this check and fix any problem before emitting JSON:
-1. Does lineItems have one entry per printed item row? Recount the rows on the image. A count that is one short almost always means you dropped a repeated adjacent row — find it.
+1. Does lineItems have exactly one entry per printed item NAME? Recount the names on the image. One too few almost always means you dropped a repeated adjacent row — find it. One too many means you invented a row to absorb a leftover amount — remove it and re-pair the amounts by position from the top.
 2. Does the sum of every lineItems totalPrice equal subtotal exactly? If it is short by roughly one item's price you dropped a row. If individual prices look implausible or one item ended up unpriced, the amount column is offset by one — re-pair and recompute.
 3. Does subtotal + tax + gratuity + fees - discounts equal total?
 Never invent, drop, merge or adjust a line item or a price to force these to reconcile. Re-read the image instead. If it still does not reconcile after re-reading, report the literal printed values and describe the discrepancy in "notes".
 
 For "restaurantName": extract the business or restaurant name from the receipt header. Return null if not identifiable.`;
 
-export async function parseReceiptImage(
-  imageUrl: string
+/**
+ * Parse an already-loaded receipt image. Separate from parseReceiptImage so the
+ * same code path can be driven from a local file — see scripts/parse-receipt.ts,
+ * which is how prompt and model changes get checked against real receipts.
+ */
+export async function parseReceiptBytes(
+  base64: string,
+  mimeType: string
 ): Promise<ParsedReceipt> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey)
@@ -127,19 +144,18 @@ export async function parseReceiptImage(
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Fetch image from Supabase Storage and convert to base64
-  const imgRes = await fetch(imageUrl);
-  if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`);
-  const imgBuffer = await imgRes.arrayBuffer();
-  const base64 = Buffer.from(imgBuffer).toString('base64');
-  const mimeType = imgRes.headers.get('content-type') ?? 'image/jpeg';
-
   const response = await ai.models.generateContent({
     model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
     contents: [{ inlineData: { mimeType, data: base64 } }, PROMPT],
     config: {
       // Extraction should be reproducible: the same receipt is the same answer.
       temperature: 0,
+      // Thinking is OFF by default on the flash-lite models, which left the
+      // prompt's verification pass (count the names, pair the two columns by
+      // position, check the sum, re-pair on mismatch) with no budget to run in.
+      // -1 is dynamic: simple receipts spend almost nothing, awkward ones get
+      // the room to actually do the check.
+      thinkingConfig: { thinkingBudget: -1 },
       responseMimeType: 'application/json',
       responseJsonSchema: RECEIPT_SCHEMA,
     },
@@ -163,4 +179,17 @@ export async function parseReceiptImage(
     if (!match) throw new Error('Gemini did not return valid JSON');
     return JSON.parse(match[0]) as ParsedReceipt;
   }
+}
+
+export async function parseReceiptImage(
+  imageUrl: string
+): Promise<ParsedReceipt> {
+  // Fetch image from Supabase Storage and convert to base64
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`);
+  const imgBuffer = await imgRes.arrayBuffer();
+  const base64 = Buffer.from(imgBuffer).toString('base64');
+  const mimeType = imgRes.headers.get('content-type') ?? 'image/jpeg';
+
+  return parseReceiptBytes(base64, mimeType);
 }
