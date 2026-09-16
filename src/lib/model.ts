@@ -1,5 +1,63 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import type { ParsedReceipt } from '@/types/receipt';
+
+/**
+ * Default parser model. Overridable with GEMINI_MODEL so a replacement can be
+ * A/B'd against real receipts without a deploy — the 2.5 series retires no
+ * earlier than 2026-10-16, so this will need to move.
+ */
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+
+/**
+ * Shape the response is constrained to. The model cannot return prose, a
+ * markdown fence, or a missing field, so the response is parseable without
+ * the string surgery this module used to do. Keep in sync with ParsedReceipt.
+ *
+ * Gemini supports only a subset of JSON Schema for responseJsonSchema, so
+ * nullable fields use `anyOf` — which is on the supported list — rather than
+ * the array-valued `type` form, which is not.
+ */
+const nullable = (type: string) => ({ anyOf: [{ type }, { type: 'null' }] });
+
+export const RECEIPT_SCHEMA = {
+  type: 'object',
+  properties: {
+    restaurantName: nullable('string'),
+    lineItems: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          quantity: { type: 'number' },
+          unitPrice: { type: 'number' },
+          totalPrice: { type: 'number' },
+        },
+        required: ['name', 'quantity', 'unitPrice', 'totalPrice'],
+      },
+    },
+    subtotal: nullable('number'),
+    tax: nullable('number'),
+    gratuity: nullable('number'),
+    fees: nullable('number'),
+    discounts: nullable('number'),
+    total: nullable('number'),
+    currency: { type: 'string' },
+    notes: nullable('string'),
+  },
+  required: [
+    'restaurantName',
+    'lineItems',
+    'subtotal',
+    'tax',
+    'gratuity',
+    'fees',
+    'discounts',
+    'total',
+    'currency',
+    'notes',
+  ],
+};
 
 const PROMPT = `You are a meticulous receipt parser. Extract all data from this receipt image.
 Return ONLY a valid JSON object (no markdown, no explanation) with this exact structure:
@@ -67,32 +125,42 @@ export async function parseReceiptImage(
   if (!apiKey)
     throw new Error('GEMINI_API_KEY environment variable is not set');
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+  const ai = new GoogleGenAI({ apiKey });
 
   // Fetch image from Supabase Storage and convert to base64
   const imgRes = await fetch(imageUrl);
   if (!imgRes.ok) throw new Error(`Failed to fetch image: ${imgRes.status}`);
   const imgBuffer = await imgRes.arrayBuffer();
   const base64 = Buffer.from(imgBuffer).toString('base64');
-  const mimeType = (imgRes.headers.get('content-type') ?? 'image/jpeg') as
-    | 'image/jpeg'
-    | 'image/png'
-    | 'image/webp';
+  const mimeType = imgRes.headers.get('content-type') ?? 'image/jpeg';
 
-  const result = await model.generateContent([
-    { inlineData: { mimeType, data: base64 } },
-    PROMPT,
-  ]);
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
+    contents: [{ inlineData: { mimeType, data: base64 } }, PROMPT],
+    config: {
+      // Extraction should be reproducible: the same receipt is the same answer.
+      temperature: 0,
+      responseMimeType: 'application/json',
+      responseJsonSchema: RECEIPT_SCHEMA,
+    },
+  });
 
-  const text = result.response
-    .text()
-    .replace(/^```json?\n?/i, '')
-    .replace(/\n?```$/i, '')
-    .trim();
+  const text = response.text?.trim();
+  if (!text) {
+    // Empty candidate — a safety block or a truncated response, not bad JSON.
+    const reason = response.candidates?.[0]?.finishReason;
+    throw new Error(
+      `Gemini returned no content${reason ? ` (finishReason: ${reason})` : ''}`
+    );
+  }
 
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Gemini did not return valid JSON');
-
-  return JSON.parse(match[0]) as ParsedReceipt;
+  try {
+    return JSON.parse(text) as ParsedReceipt;
+  } catch {
+    // The schema should make this unreachable. Fall back to the old salvage
+    // path rather than failing the whole parse on an unexpected wrapper.
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Gemini did not return valid JSON');
+    return JSON.parse(match[0]) as ParsedReceipt;
+  }
 }
