@@ -55,16 +55,23 @@ Free tier: 1,500 requests/day. Each parse takes ~2 seconds.
 
 ### Choosing a model
 
-The default is `gemini-2.5-flash-lite`. Override it without a code change to
-compare models on real receipts:
+The default is `gemini-3.8-flash`. Override it, and the thinking budget, without
+a code change:
 
 ```
-GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_MODEL=gemini-3.7-flash
+GEMINI_THINKING_BUDGET=1024     # -1 dynamic, 0 off (default)
 ```
 
-The 2.5 series retires no earlier than **2026-10-16**, so the default will need
-to move before then. Verify the exact model ID against Google's current model
-list before switching.
+**Do not switch to a `flash-lite` model.** Every lite variant tested (2.5, 3.1,
+3.5) misreads receipts whose amount column is printed offset by a line, with or
+without a thinking budget. Every full `flash` model reads them correctly.
+
+Check any replacement against a real receipt before shipping it:
+
+```
+bun parse:receipt ~/Downloads/receipt.jpg --expect 307
+```
 
 ## Bill Flow
 

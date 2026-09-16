@@ -2,11 +2,15 @@ import { GoogleGenAI } from '@google/genai';
 import type { ParsedReceipt } from '@/types/receipt';
 
 /**
- * Default parser model. Overridable with GEMINI_MODEL so a replacement can be
- * A/B'd against real receipts without a deploy — the 2.5 series retires no
- * earlier than 2026-10-16, so this will need to move.
+ * Every flash-lite model tested misreads receipts whose amount column is
+ * printed offset by a line — 2.5, 3.1 and 3.5 lite all failed the Local Cantina
+ * check, with or without a thinking budget. Every full flash model got it
+ * right. Verify a replacement with `bun parse:receipt` before changing this.
  */
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+export const DEFAULT_MODEL = 'gemini-3.8-flash';
+
+/** -1 is dynamic (the model decides), 0 disables thinking. */
+const THINKING_BUDGET = Number(process.env.GEMINI_THINKING_BUDGET ?? 0);
 
 /**
  * Shape the response is constrained to. The model cannot return prose, a
@@ -150,12 +154,9 @@ export async function parseReceiptBytes(
     config: {
       // Extraction should be reproducible: the same receipt is the same answer.
       temperature: 0,
-      // Thinking is OFF by default on the flash-lite models, which left the
-      // prompt's verification pass (count the names, pair the two columns by
-      // position, check the sum, re-pair on mismatch) with no budget to run in.
-      // -1 is dynamic: simple receipts spend almost nothing, awkward ones get
-      // the room to actually do the check.
-      thinkingConfig: { thinkingBudget: -1 },
+      // The prompt's verification pass (count the names, pair the two columns
+      // by position, check the sum) needs a reasoning budget to run in.
+      thinkingConfig: { thinkingBudget: THINKING_BUDGET },
       responseMimeType: 'application/json',
       responseJsonSchema: RECEIPT_SCHEMA,
     },

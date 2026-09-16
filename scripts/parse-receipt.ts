@@ -15,7 +15,7 @@
  */
 import { readFileSync } from 'fs';
 import { extname } from 'path';
-import { parseReceiptBytes } from '../src/lib/model';
+import { parseReceiptBytes, DEFAULT_MODEL } from '../src/lib/model';
 import { reconcileSubtotal, sumLineItems, describeReconciliation } from '../src/lib/reconcile';
 
 const MIME: Record<string, string> = {
@@ -58,7 +58,7 @@ try {
 const elapsed = ((Date.now() - started) / 1000).toFixed(1);
 
 console.log(`\n${parsed.restaurantName ?? '(no restaurant name)'}`);
-console.log(`${process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'} · ${elapsed}s\n`);
+console.log(`${process.env.GEMINI_MODEL || DEFAULT_MODEL} · ${elapsed}s\n`);
 
 for (const [i, item] of parsed.lineItems.entries()) {
   const qty = item.quantity !== 1 ? `${item.quantity} × ${money(item.unitPrice)}` : '';
